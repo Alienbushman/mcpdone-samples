@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "content-opportunity": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "./products/mcp-content-opportunity",
+        "run",
+        "python",
+        "-m",
+        "mcp_content_opportunity.server"
+      ]
+    }
+  }
+}

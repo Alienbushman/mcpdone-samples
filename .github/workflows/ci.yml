@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  mcp-content-opportunity-tests:
+    name: mcp-content-opportunity tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp-content-opportunity
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Install Python + dependencies
+        run: uv sync --all-extras --dev
+      - name: Run pytest
+        run: uv run pytest -v --tb=short
+
+  mcp-sqlite-query-tests:
+    name: mcp-sqlite-query tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp-sqlite-query
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Install Python + dependencies
+        run: uv sync --all-extras --dev
+      - name: Run pytest
+        run: uv run pytest -v --tb=short
+
+  mcp-gmail-reader-tests:
+    name: mcp-gmail-reader tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp-gmail-reader
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Install Python + dependencies
+        run: uv sync --all-extras --dev
+      - name: Run pytest
+        run: uv run pytest -v --tb=short

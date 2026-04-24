@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Virtualenvs
+.venv/
+venv/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Local artefacts
+smoke_test_output.md
+
+# Secrets — never commit
+.env
+.env.local
+*.secret
+credentials.json
+
+# SQLite test DBs — fixtures under tests/fixtures are allowed
+*.db
+*.sqlite
+*.sqlite3
+!**/tests/fixtures/*.db

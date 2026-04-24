@@ -1,0 +1,39 @@
+[project]
+name = "mcp-sqlite-query"
+version = "0.1.0"
+description = "Read-only MCP server for SQLite databases. Gives Claude Code safe query + introspection tools."
+readme = "README.md"
+authors = [
+    { name = "Alienbushman", email = "31990027+Alienbushman@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+license = "MIT"
+keywords = ["mcp", "sqlite", "claude-code", "read-only"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Database",
+]
+dependencies = [
+    "mcp>=1.0",
+]
+
+[project.scripts]
+mcp-sqlite-query = "mcp_sqlite_query.server:main"
+
+[build-system]
+requires = ["uv_build>=0.10.11,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

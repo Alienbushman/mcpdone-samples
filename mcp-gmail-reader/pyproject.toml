@@ -1,0 +1,40 @@
+[project]
+name = "mcp-gmail-reader"
+version = "0.1.0"
+description = "Read-only MCP server for Gmail (IMAP). Scope-locked to a single label; can draft replies but never send or delete."
+readme = "README.md"
+authors = [
+    { name = "Alienbushman", email = "31990027+Alienbushman@users.noreply.github.com" }
+]
+requires-python = ">=3.11"
+license = "MIT"
+keywords = ["mcp", "gmail", "imap", "claude-code", "inbox"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Email",
+]
+dependencies = [
+    "mcp>=1.0",
+    "python-dotenv>=1.0",
+]
+
+[project.scripts]
+mcp-gmail-reader = "mcp_gmail_reader.server:main"
+
+[build-system]
+requires = ["uv_build>=0.10.11,<0.11.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.3.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

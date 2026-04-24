@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+dist/
+build/
+
+# Virtualenv
+.venv/
+venv/
+
+# uv
+uv.lock
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Test DBs — if anyone drops one in for local experimentation
+*.db
+*.sqlite
+*.sqlite3
+!tests/fixtures/*.db

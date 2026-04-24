@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Claude Code Audit — self-directed-agent</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 2cm 2cm 2.5cm 2cm;
+      @bottom-center {
+        content: "Page " counter(page) " of " counter(pages);
+        font-size: 9pt;
+        color: #666;
+      }
+    }
+    :root {
+      --fg: #1a1a1a;
+      --muted: #6b7280;
+      --bg: #ffffff;
+      --accent: #111827;
+      --border: #e5e7eb;
+      --code-bg: #f3f4f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.55;
+      color: var(--fg);
+      background: var(--bg);
+      max-width: 780px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+    }
+    h1, h2, h3, h4 {
+      color: var(--accent);
+      line-height: 1.25;
+      margin-top: 1.8em;
+      margin-bottom: 0.5em;
+      page-break-after: avoid;
+    }
+    h1 { font-size: 28pt; margin-top: 0; border-bottom: 2px solid var(--border); padding-bottom: 0.3em; }
+    h2 { font-size: 18pt; border-bottom: 1px solid var(--border); padding-bottom: 0.2em; }
+    h3 { font-size: 14pt; }
+    h4 { font-size: 12pt; }
+    p { margin: 0.7em 0; }
+    ul, ol { padding-left: 1.6em; margin: 0.7em 0; }
+    li { margin: 0.25em 0; }
+    a { color: #1d4ed8; text-decoration: none; border-bottom: 1px solid #c7d2fe; }
+    a:hover { border-bottom-color: #1d4ed8; }
+    code {
+      font-family: "SF Mono", "Consolas", "Menlo", monospace;
+      font-size: 0.92em;
+      background: var(--code-bg);
+      padding: 0.15em 0.4em;
+      border-radius: 3px;
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1em;
+      overflow-x: auto;
+      font-size: 9.5pt;
+      line-height: 1.5;
+      page-break-inside: avoid;
+    }
+    pre code {
+      background: transparent;
+      padding: 0;
+    }
+    blockquote {
+      margin: 1em 0;
+      padding: 0.5em 1em;
+      border-left: 4px solid var(--border);
+      color: var(--muted);
+      background: #fafafa;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1em 0;
+      font-size: 10pt;
+      page-break-inside: avoid;
+    }
+    th, td {
+      padding: 0.5em 0.75em;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: #f9fafb;
+      font-weight: 600;
+    }
+    tr:nth-child(even) td {
+      background: #fafafa;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 2em 0;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 9.5pt;
+      margin-top: -0.8em;
+      margin-bottom: 2em;
+    }
+    .footer {
+      margin-top: 3rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 9pt;
+      text-align: center;
+    }
+    /* Pygments code highlighting */
+    .codehilite .k, .codehilite .kn, .codehilite .kd { color: #7c3aed; font-weight: 500; }
+    .codehilite .s, .codehilite .s1, .codehilite .s2 { color: #15803d; }
+    .codehilite .c, .codehilite .c1, .codehilite .cm { color: #6b7280; font-style: italic; }
+    .codehilite .nb { color: #1d4ed8; }
+    .codehilite .nn, .codehilite .nc { color: #0891b2; }
+    .codehilite .n { color: var(--fg); }
+
+    @media print {
+      body { margin: 0; max-width: none; padding: 0; }
+      a { color: var(--fg); border-bottom: none; }
+      a::after { content: " (" attr(href) ")"; font-size: 8pt; color: var(--muted); }
+      a[href^="#"]::after { content: ""; }
+      pre, blockquote, table { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+  <h2 id="claude-code-audit-self-directed-agent">Claude Code Audit — self-directed-agent</h2>
+<p><strong>Subject:</strong> self-directed-agent repo
+<strong>Audited by:</strong> Claude (acting as the $299 audit tier deliverable for dogfood purposes)
+<strong>Date:</strong> 2026-04-20
+<strong>Scope:</strong> <code>.claude/</code> configuration, repo structure, and workflow integration opportunities</p>
+<hr />
+<h3 id="1-executive-summary">1. Executive summary</h3>
+<p>The repo currently has the <strong>bare-minimum Claude Code footprint</strong>: a single <code>settings.local.json</code> with three <code>allow</code> permissions, no committed team settings, no CLAUDE.md, no hooks, no skills, and no configured MCP servers — even though this repo <em>ships</em> an MCP server (<code>products/mcp-content-opportunity</code>) that it should dogfood.</p>
+<p>The opportunity is large. Implementing the recommendations below would:
+- Eliminate ~80% of permission prompts during normal development.
+- Give every new Claude Code session automatic project context.
+- Wire in the project's own MCP server so content research happens without leaving the editor.
+- Add lightweight safety hooks preventing common foot-guns (accidentally committing secrets, running destructive bash, bypassing tests).</p>
+<p>Estimated time to implement everything: <strong>~45 minutes</strong>.</p>
+<hr />
+<h3 id="2-current-state">2. Current state</h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Status</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>.claude/settings.json</code> (shared)</td>
+<td>❌ Missing</td>
+<td>No team-wide config</td>
+</tr>
+<tr>
+<td><code>.claude/settings.local.json</code></td>
+<td>✅ Exists</td>
+<td>164 bytes, 3 <code>allow</code> rules</td>
+</tr>
+<tr>
+<td><code>CLAUDE.md</code></td>
+<td>❌ Missing</td>
+<td>No project context for new sessions</td>
+</tr>
+<tr>
+<td><code>.claude/skills/</code></td>
+<td>❌ Missing</td>
+<td>No custom skills</td>
+</tr>
+<tr>
+<td><code>.claude/agents/</code></td>
+<td>❌ Missing</td>
+<td>No subagent definitions</td>
+</tr>
+<tr>
+<td><code>.claude/commands/</code></td>
+<td>❌ Missing</td>
+<td>No custom slash commands</td>
+</tr>
+<tr>
+<td><code>.mcp.json</code> (project MCP servers)</td>
+<td>❌ Missing</td>
+<td>Our own MCP server is not wired in</td>
+</tr>
+<tr>
+<td>Hooks</td>
+<td>❌ Missing</td>
+<td>No automation guards</td>
+</tr>
+<tr>
+<td><code>.gitignore</code> includes <code>.claude/settings.local.json</code></td>
+<td>✅ Yes (added today)</td>
+<td>Correct</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Current allow list</strong> (<code>.claude/settings.local.json</code>):
+- <code>WebFetch(domain:www.wearefounders.uk)</code>
+- <code>WebFetch(domain:www.moneyweb.co.za)</code>
+- <code>Bash(gh auth *)</code></p>
+<p>These are research-era artefacts — useful then, but no longer covering current work patterns (Python, uv, pytest, git, gh, Vercel, etc.).</p>
+<hr />
+<h3 id="3-gaps-and-recommendations-ranked-by-impact">3. Gaps and recommendations (ranked by impact)</h3>
+<h4 id="priority-1-add-a-team-settingsjson-with-proper-allow-list">Priority 1 — Add a team <code>settings.json</code> with proper allow list</h4>
+<p><strong>Problem:</strong> every <code>uv run pytest</code>, <code>git commit</code>, <code>gh</code> command, etc. prompts for permission. Throws off flow and wastes session time.</p>
+<p><strong>Fix:</strong> create <code>.claude/settings.json</code> (committed) with a conservative-but-useful allow list for this repo's toolchain. Drop-in config:</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;$schema&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://json.schemastore.org/claude-code-settings.json&quot;</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">&quot;permissions&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;allow&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="s2">&quot;Bash(uv *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(python *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(pytest *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git add *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git commit *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git status)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git diff *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git log *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git push *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git pull *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git checkout *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git branch *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git remote -v)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(gh auth status)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(gh repo *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(gh pr *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(gh issue *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(mkdir *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(ls *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(cat *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(npm --version)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(node --version)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;WebFetch(domain:docs.anthropic.com)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;WebFetch(domain:github.com)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;WebFetch(domain:news.ycombinator.com)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;WebFetch(domain:reddit.com)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;WebSearch&quot;</span>
+<span class="w">    </span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;deny&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="s2">&quot;Bash(rm -rf *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git push --force *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git push -f *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(git reset --hard *)&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="s2">&quot;Bash(sudo *)&quot;</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p><strong>Why deny-list matters:</strong> prevents Claude from ever taking a destructive action without an explicit user bypass. Cheap defence against bad agent behaviour.</p>
+<h4 id="priority-2-create-claudemd-so-new-sessions-start-with-project-context">Priority 2 — Create <code>CLAUDE.md</code> so new sessions start with project context</h4>
+<p><strong>Problem:</strong> every new session starts blank. Claude re-derives what the repo is, what tech is used, and what conventions exist — wasting tokens and risking inconsistency.</p>
+<p><strong>Fix:</strong> create a concise <code>CLAUDE.md</code> at repo root. Target ≤100 lines, not a novel. Drop-in content:</p>
+<div class="codehilite"><pre><span></span><code><span class="gh"># CLAUDE.md</span>
+
+<span class="gu">## Project</span>
+Self-directed-agent experiment. Claude attempts to generate income; human handles real-world execution. Currently bootstrapping a Claude Code consultancy — see <span class="sb">`PLAN.md`</span> for the authoritative plan.
+
+<span class="gu">## Tech</span>
+<span class="k">-</span><span class="w"> </span>Python 3.11+ with uv for package management (<span class="sb">`uv sync`</span>, <span class="sb">`uv run`</span>, <span class="sb">`uv add`</span>)
+<span class="k">-</span><span class="w"> </span>Pytest for tests (<span class="sb">`uv run pytest`</span>)
+<span class="k">-</span><span class="w"> </span>Markdown for docs
+<span class="k">-</span><span class="w"> </span>Git with <span class="sb">`master`</span> as default branch; remote at <span class="sb">`github.com/Alienbushman/self-directed-agent`</span>
+
+<span class="gu">## Conventions</span>
+<span class="k">-</span><span class="w"> </span>Use absolute imports (<span class="sb">`from mcp_content_opportunity.x import y`</span>)
+<span class="k">-</span><span class="w"> </span>Type hints on all public functions
+<span class="k">-</span><span class="w"> </span>Tests offline-only by default; live network tests live in <span class="sb">`smoke_test.py`</span>, never in <span class="sb">`tests/`</span>
+<span class="k">-</span><span class="w"> </span>Research docs in <span class="sb">`research/`</span>; deliverables in <span class="sb">`deliverables/`</span>; products in <span class="sb">`products/`</span>
+<span class="k">-</span><span class="w"> </span>Never commit <span class="sb">`.env`</span>, <span class="sb">`credentials.json`</span>, or <span class="sb">`.claude/settings.local.json`</span>
+<span class="k">-</span><span class="w"> </span><span class="sb">`PLAN.md`</span> is authoritative for strategy; update it when direction changes
+
+<span class="gu">## What to do first in a new session</span>
+<span class="k">1.</span> Read <span class="sb">`PLAN.md`</span> — progress tracker is there
+<span class="k">2.</span> Check <span class="sb">`memory/active_strategy.md`</span> in the user&#39;s home Claude folder
+<span class="k">3.</span> Work through the next unchecked task in the PLAN
+
+<span class="gu">## Don&#39;t</span>
+<span class="k">-</span><span class="w"> </span>Install packages globally; always use <span class="sb">`uv add`</span> within a project dir
+<span class="k">-</span><span class="w"> </span>Push to <span class="sb">`master`</span> without running tests first
+<span class="k">-</span><span class="w"> </span>Create files outside <span class="sb">`products/`</span>, <span class="sb">`research/`</span>, or <span class="sb">`deliverables/`</span> without asking
+</code></pre></div>
+
+<h4 id="priority-3-wire-the-projects-own-mcp-server-into-claude-code">Priority 3 — Wire the project's own MCP server into Claude Code</h4>
+<p><strong>Problem:</strong> we built an MCP server but haven't configured Claude Code to use it. Dogfooding our own product is step one.</p>
+<p><strong>Fix:</strong> create <code>.mcp.json</code> at repo root (committed, version-controlled team MCP config):</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;mcpServers&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;content-opportunity&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;uv&quot;</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">&quot;args&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">        </span><span class="s2">&quot;--directory&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;./products/mcp-content-opportunity&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;run&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;python&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;-m&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="s2">&quot;mcp_content_opportunity.server&quot;</span>
+<span class="w">      </span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>After adding: in a Claude Code session, type <code>/mcp</code> to confirm the server shows as connected, then try "find content opportunities on MCP server security."</p>
+<h4 id="priority-4-add-hooks-for-safety-productivity">Priority 4 — Add hooks for safety + productivity</h4>
+<p>Three small hooks pay for themselves immediately:</p>
+<p><strong>4a. Pre-tool-use hook: block secret-looking strings in edits</strong>
+Prevents pasting <code>AWS_SECRET_ACCESS_KEY=AKIA...</code> style strings into files that would get committed.</p>
+<p><strong>4b. Post-Bash hook: log long-running commands</strong>
+Writes timing info to <code>.claude/bash_log.jsonl</code> so we can spot flaky/slow commands across sessions.</p>
+<p><strong>4c. Stop hook: run pytest if Python changed and we haven't yet this session</strong>
+Catches regressions before the human even asks.</p>
+<p>Drop-in <code>settings.json</code> addition:</p>
+<div class="codehilite"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">&quot;hooks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;PreToolUse&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;matcher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Edit|Write&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;hooks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">          </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;command&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;python scripts/hooks/block_secrets.py&quot;</span>
+<span class="w">          </span><span class="p">}</span>
+<span class="w">        </span><span class="p">]</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">],</span>
+<span class="w">    </span><span class="nt">&quot;PostToolUse&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;matcher&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Bash&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;hooks&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">          </span><span class="p">{</span>
+<span class="w">            </span><span class="nt">&quot;type&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;command&quot;</span><span class="p">,</span>
+<span class="w">            </span><span class="nt">&quot;command&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;python scripts/hooks/log_bash.py&quot;</span>
+<span class="w">          </span><span class="p">}</span>
+<span class="w">        </span><span class="p">]</span>
+<span class="w">      </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+
+<p>(Hook scripts to be added in <code>scripts/hooks/</code> — straightforward, ~30 LOC each.)</p>
+<h4 id="priority-5-custom-slash-commands-for-common-workflows">Priority 5 — Custom slash commands for common workflows</h4>
+<p>Two commands that each save 30+ seconds per invocation:</p>
+<p><strong><code>/test</code> → run pytest with the right directory context</strong></p>
+<div class="codehilite"><pre><span></span><code>products/mcp-content-opportunity/.claude/commands/test.md
+</code></pre></div>
+
+<p>Body:</p>
+<div class="codehilite"><pre><span></span><code>---
+description: Run the pytest suite for the MCP content opportunity product
+---
+
+cd products/mcp-content-opportunity &amp;&amp; uv run pytest -v
+</code></pre></div>
+
+<p><strong><code>/smoke</code> → run the live smoke test</strong></p>
+<div class="codehilite"><pre><span></span><code>products/mcp-content-opportunity/.claude/commands/smoke.md
+</code></pre></div>
+
+<h4 id="priority-6-two-starter-skills">Priority 6 — Two starter skills</h4>
+<p><strong>6a. <code>service-delivery</code> skill</strong> — defines the SOP for delivering a client's $299/$499/$999 package. Activated when Claude sees a client intake form. Reduces delivery variance.</p>
+<p><strong>6b. <code>seo-post</code> skill</strong> — defines the house style for blog posts (word count, structure, meta description, CTA). Activated when asked to draft blog content. Ensures consistent brand voice across the always-on content engine.</p>
+<hr />
+<h3 id="4-security-review">4. Security review</h3>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Current state</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Secrets in repo</td>
+<td>None found (scanned)</td>
+<td>Pre-commit hook to block future leaks</td>
+</tr>
+<tr>
+<td><code>allow</code> list too permissive</td>
+<td>No, currently minimal</td>
+<td>Keep deny-list on destructive bash</td>
+</tr>
+<tr>
+<td><code>.claude/settings.local.json</code> in git</td>
+<td>No (gitignored)</td>
+<td>✅ correct</td>
+</tr>
+<tr>
+<td>MCP server permissions</td>
+<td>N/A (none configured)</td>
+<td>Once added, review tool surface area per server</td>
+</tr>
+<tr>
+<td>Git push to master without review</td>
+<td>Possible</td>
+<td>Add Stop hook or CI to require passing tests</td>
+</tr>
+</tbody>
+</table>
+<p>No red flags currently. The main hardening is the deny-list for destructive bash commands.</p>
+<hr />
+<h3 id="5-prioritised-action-list">5. Prioritised action list</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Action</th>
+<th>Est. time</th>
+<th>Priority</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Commit <code>.claude/settings.json</code> with allow/deny lists</td>
+<td>5 min</td>
+<td>P1</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Create <code>CLAUDE.md</code> at root</td>
+<td>10 min</td>
+<td>P1</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Create <code>.mcp.json</code> wiring the content-opportunity server</td>
+<td>2 min</td>
+<td>P2</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Add pre-commit block-secrets hook</td>
+<td>15 min</td>
+<td>P3</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Add <code>/test</code> and <code>/smoke</code> slash commands</td>
+<td>5 min</td>
+<td>P3</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Write <code>service-delivery</code> skill</td>
+<td>20 min</td>
+<td>P4 (do when first client inquires)</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Write <code>seo-post</code> skill</td>
+<td>15 min</td>
+<td>P4 (do before first blog post)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Total to implement P1–P3: ~40 minutes.</strong></p>
+<hr />
+<h3 id="6-what-i-did-not-audit">6. What I did NOT audit</h3>
+<ul>
+<li>The contents of <code>products/mcp-content-opportunity</code> as a codebase (that's the Build-tier deliverable, not Audit-tier)</li>
+<li>Runtime performance of the existing allow list</li>
+<li>CI/CD setup (none currently, no action needed yet)</li>
+<li>Cross-project conventions (single-project repo, N/A)</li>
+</ul>
+<p>If you want a deeper dive on any of these, upsell to the $999 team setup tier.</p>
+<hr />
+<h3 id="7-appendix-files-delivered">7. Appendix — files delivered</h3>
+<p>Alongside this audit:</p>
+<ul>
+<li><code>drop-in/settings.json</code> — ready-to-commit team settings</li>
+<li><code>drop-in/CLAUDE.md</code> — ready-to-commit project-context file</li>
+<li><code>drop-in/.mcp.json</code> — MCP server wiring</li>
+<li><code>drop-in/hooks/block_secrets.py</code> — pre-tool-use hook</li>
+<li><code>drop-in/hooks/log_bash.py</code> — post-tool-use hook</li>
+<li><code>drop-in/commands/test.md</code> + <code>smoke.md</code> — slash commands</li>
+</ul>
+<p>All files live under <code>deliverables/drop-in/</code> in the repo.</p>
+  <div class="footer">
+    Rendered 2026-04-21 19:17 UTC from self_audit.md
+  </div>
+</body>
+</html>
