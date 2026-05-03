@@ -24,6 +24,10 @@ Each one is a standalone Python project, MIT-licensed, with its own README + tes
 
 - **[`sample-audit/self_audit.html`](sample-audit/self_audit.html)** — rendered HTML version of the audit report, printable to PDF via any browser.
 
+### Production-MCP guardrails
+
+- **[`mcp-guardrails/`](mcp-guardrails/)** — lint hooks for the bug classes that bite production MCP servers. Currently ships `check_mcp_tool_async.py`, which catches the `asyncio.run() inside @mcp.tool()` anti-pattern that broke our own twitter-reader MCP at first call (despite 42 passing unit tests). Includes a fixture file demonstrating the bug. Wire as a pre-commit hook or CI step. Our service-delivery SOP requires this lint to pass before any customer MCP server ships.
+
 ## How we ship this kind of thing
 
 If your team wants something in the shape of these samples — custom MCP server wired to your internal tools, an audit of your current Claude Code setup, or a full team rollout — that's what we do:
