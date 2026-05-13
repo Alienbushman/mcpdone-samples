@@ -136,8 +136,13 @@ def rank_opportunities(
 ) -> str:
     """Rank a list of previously-fetched opportunities and format as markdown.
 
-    Takes the raw dicts returned by search_hn / search_subreddit, scores them,
-    and returns a markdown report.
+    Takes the raw dicts returned by search_hn or search_subreddit and scores
+    each on the same five heuristics find_opportunities uses (engagement,
+    recency, question-intensity, comment-to-score ratio, pain keywords).
+
+    Use this when you've already fetched hits in earlier turns and just want
+    them ranked + formatted, rather than re-running the search. For a
+    single-shot search-then-rank flow, call find_opportunities directly.
     """
     from datetime import datetime
 

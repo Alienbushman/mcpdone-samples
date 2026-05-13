@@ -166,7 +166,10 @@ def search_leads(
 def check_inbox_status() -> dict[str, Any]:
     """Get a snapshot of the inbox: counts + last-received timestamp.
 
-    Cheap way to ask 'has anything come in?' without pulling any email bodies.
+    Cheap way to ask 'has anything come in?' without pulling any email bodies
+    or paying for the per-message reads list_leads incurs. Use this as the
+    first call in any inbox-triage workflow — if unread_messages is 0, you
+    can skip further calls entirely.
 
     Returns:
         {

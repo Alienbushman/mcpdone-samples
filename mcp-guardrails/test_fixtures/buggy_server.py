@@ -36,13 +36,19 @@ async def _do_async_work() -> dict:
 def broken_tool() -> dict:
     """The bug: sync def calling asyncio.run() inside.
 
-    At runtime under FastMCP, raises:
-        RuntimeError: asyncio.run() cannot be called from a running event loop
+    At runtime under FastMCP, this raises RuntimeError: asyncio.run() cannot
+    be called from a running event loop. Demonstrates the bug class that the
+    NO_ASYNCIO_RUN_INSIDE_MCP_TOOL check catches.
     """
     return asyncio.run(_do_async_work())
 
 
 @mcp.tool()
 async def fixed_tool() -> dict:
-    """The fix: async def + await."""
+    """The fix: async def + await.
+
+    Reference implementation showing the correct shape side-by-side with the
+    broken one above. Tools that do async work should always be async def
+    and use await directly instead of asyncio.run().
+    """
     return await _do_async_work()
