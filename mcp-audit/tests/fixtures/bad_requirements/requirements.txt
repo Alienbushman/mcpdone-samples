@@ -1,0 +1,7 @@
+# An old pin that's BadHost-vulnerable.
+starlette==0.36.3
+# These should not trigger the check.
+fastapi>=0.110.0
+httpx
+# Comments and -r/-c lines must be ignored.
+-r requirements-dev.txt

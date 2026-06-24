@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mcp-audit"
+version = "0.1.0"
+description = "Static security + correctness audit for MCP server repos. Scans for the BadHost (Starlette) and FastMCP wrapper-layer bug classes by default; more checks landing."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["mcp", "model-context-protocol", "audit", "security", "static-analysis"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
+]
+dependencies = [
+  "packaging>=23.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+]
+
+[project.scripts]
+mcp-audit = "mcp_audit.cli:main"
+
+[project.urls]
+Homepage = "https://mcpdone.com"
+Repository = "https://github.com/Alienbushman/mcpdone-samples"
+Issues = "https://github.com/Alienbushman/mcpdone-samples/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_audit"]

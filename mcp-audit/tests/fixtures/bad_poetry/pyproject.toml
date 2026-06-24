@@ -1,0 +1,8 @@
+[tool.poetry]
+name = "bad-poetry-app"
+version = "0.0.1"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+starlette = "^0.36.0"
+fastapi = "^0.110.0"
