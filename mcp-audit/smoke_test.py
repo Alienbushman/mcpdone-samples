@@ -67,10 +67,42 @@ def main() -> int:
     except (json.JSONDecodeError, KeyError) as exc:
         failures.append(f"bad_server/: --json output didn't parse: {exc}\n{out}")
 
-    # 4. --list-checks should exit 0 with both checks named.
+    # 4. --list-checks should exit 0 with all three v0.2 checks named.
     code, out, _ = run_cli(["--list-checks"])
-    if code != 0 or "starlette_badhost" not in out or "fastmcp_wrapper_layer" not in out:
-        failures.append(f"--list-checks: unexpected output (code={code}): {out!r}")
+    for check_name in ("starlette_badhost", "fastmcp_wrapper_layer", "tool_input_validation"):
+        if check_name not in out:
+            failures.append(f"--list-checks: missing {check_name} (got {out!r})")
+    if code != 0:
+        failures.append(f"--list-checks: exit code was {code}")
+
+    # 5. Loose-inputs fixture should produce 8 LOW findings (all from the
+    # tool_input_validation check).
+    code, out, _ = run_cli(
+        [str(FIXTURES / "loose_inputs"), "--json", "--check", "tool_input_validation"]
+    )
+    if code != 1:
+        failures.append(f"loose_inputs/: expected exit 1, got {code}")
+    try:
+        payload = json.loads(out)
+        if payload["finding_count"] != 8:
+            failures.append(
+                f"loose_inputs/: expected 8 tool_input_validation findings, "
+                f"got {payload['finding_count']}"
+            )
+        elif any(f["severity"] != "low" for f in payload["findings"]):
+            failures.append(
+                "loose_inputs/: expected all LOW severity, "
+                f"got {sorted({f['severity'] for f in payload['findings']})}"
+            )
+    except (json.JSONDecodeError, KeyError) as exc:
+        failures.append(f"loose_inputs/: --json output didn't parse: {exc}\n{out}")
+
+    # 6. Tight-inputs fixture should be clean for tool_input_validation.
+    code, out, _ = run_cli(
+        [str(FIXTURES / "tight_inputs"), "--check", "tool_input_validation"]
+    )
+    if code != 0 or "OK" not in out:
+        failures.append(f"tight_inputs/: expected exit 0 + OK, got code={code}, out={out!r}")
 
     if failures:
         print("Smoke test FAILED:")

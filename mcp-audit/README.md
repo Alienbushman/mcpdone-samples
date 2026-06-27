@@ -15,12 +15,13 @@ Exit codes: **0** clean, **1** at least one finding, **2** usage error.
 
 ## What it checks
 
-| Check ID                  | What it finds                                                                                                  |
-|---------------------------|----------------------------------------------------------------------------------------------------------------|
-| `starlette_badhost`       | Starlette < 1.0.1 in `pyproject.toml`, `requirements*.txt`, `uv.lock`, `poetry.lock`, `pdm.lock`. **BadHost** (CVE-2026-48710) lets a crafted HTTP `Host` header bypass path-based authorization. Affects any HTTP/SSE-transport MCP server. Stdio servers are unaffected. |
-| `fastmcp_wrapper_layer`   | Sync `@mcp.tool()` functions that call `asyncio.run(...)` inside their body. FastMCP invokes tools inside an already-running event loop; `asyncio.run()` raises `RuntimeError`. Looks fine in unit tests, dies on the first real protocol call. |
+| Check ID                  | Severity   | What it finds                                                                                                  |
+|---------------------------|------------|----------------------------------------------------------------------------------------------------------------|
+| `starlette_badhost`       | HIGH / MED | Starlette < 1.0.1 in `pyproject.toml`, `requirements*.txt`, `uv.lock`, `poetry.lock`, `pdm.lock`. **BadHost** (CVE-2026-48710) lets a crafted HTTP `Host` header bypass path-based authorization. Affects any HTTP/SSE-transport MCP server. Stdio servers are unaffected. |
+| `fastmcp_wrapper_layer`   | HIGH       | Sync `@mcp.tool()` functions that call `asyncio.run(...)` inside their body. FastMCP invokes tools inside an already-running event loop; `asyncio.run()` raises `RuntimeError`. Looks fine in unit tests, dies on the first real protocol call. |
+| `tool_input_validation`   | LOW        | `@mcp.tool()` parameters typed as bare `str` / `bytes` / `Any` / `list[Any]` / `dict[..., Any]` or with no annotation at all. The schema FastMCP exposes to the LLM is the substrate prompt-injection-via-tool-description attacks rely on; constraining it (`Annotated[str, Field(max_length=N)]`, `Literal[...]`, Pydantic models) closes the window without losing expressiveness. Hygiene check, not a CVE — expect findings even on well-written servers. *Added in v0.2.* |
 
-More checks are landing — loose input schemas, hard-coded secrets, write-API tools missing a `FORBIDDEN_NAMES`-style guardrail, read-only-by-default violations.
+More checks are landing — command-injection sinks in shell-wrapping MCPs, hard-coded secrets, write-API tools missing a `FORBIDDEN_NAMES`-style guardrail, read-only-by-default violations, path traversal in filesystem-touching servers.
 
 ## Output format
 

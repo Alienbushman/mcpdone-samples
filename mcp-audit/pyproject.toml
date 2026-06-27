@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-audit"
-version = "0.1.0"
-description = "Static security + correctness audit for MCP server repos. Scans for the BadHost (Starlette) and FastMCP wrapper-layer bug classes by default; more checks landing."
+version = "0.2.0"
+description = "Static security + correctness audit for MCP server repos. Ships three checks in v0.2: Starlette BadHost dependency, FastMCP wrapper-layer asyncio.run() pattern, and loosely-typed @mcp.tool() parameters."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
