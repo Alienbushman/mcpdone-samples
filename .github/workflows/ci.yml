@@ -53,3 +53,21 @@ jobs:
         run: uv sync --all-extras --dev
       - name: Run pytest
         run: uv run pytest -v --tb=short
+
+  mcp-audit-tests:
+    name: mcp-audit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp-audit
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+      - name: Install Python + dependencies
+        run: uv sync --all-extras --dev
+      - name: Run pytest
+        run: uv run pytest -v --tb=short
+      - name: Run smoke test (CLI end-to-end against fixtures)
+        run: uv run python smoke_test.py
