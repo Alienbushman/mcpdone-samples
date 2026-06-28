@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-audit"
-version = "0.3.0"
-description = "Static security + correctness audit for MCP server repos. Ships four checks in v0.3: Starlette BadHost dependency, FastMCP wrapper-layer asyncio.run() pattern, loosely-typed @mcp.tool() parameters, and command-injection sinks reachable from tool parameters."
+version = "0.4.0"
+description = "Static security + correctness audit for MCP server repos. Ships four checks; v0.4 extends command_injection with same-file cross-function taint propagation (catches tool -> helper -> sink flows that v0.3's single-function walker missed)."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

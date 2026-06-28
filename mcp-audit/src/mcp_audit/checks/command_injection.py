@@ -125,17 +125,32 @@ def _is_string_interpolation(node: ast.expr) -> bool:
 
 class _TaintWalker(ast.NodeVisitor):
     """Walks a single function body. Tracks tainted local names + collects
-    finding records as (lineno, severity_hint, message_kind, sink_kind).
+    finding records as (lineno, message_kind, sink_kind, entry_chain).
 
-    `severity_hint` is currently always HIGH for this check; the field
-    leaves room for v0.4 to downgrade list-of-args-no-shell patterns to
-    MEDIUM if we ever decide to surface those.
+    v0.4 adds optional cross-function recursion: when `local_functions` is
+    supplied, calls to known same-file functions get expanded inline. The
+    callee is walked with a tainted set derived from which callsite args
+    were tainted (positional + keyword binding). A `recursion_visited` set
+    prevents infinite expansion of mutual recursion. `entry_chain` records
+    the call path (tool entry -> helper -> ... -> sink) so findings can be
+    attributed to the @mcp.tool() entry rather than the helper file.
     """
 
-    def __init__(self, function_name: str, param_names: set[str]) -> None:
+    def __init__(
+        self,
+        function_name: str,
+        param_names: set[str],
+        *,
+        local_functions: dict[str, ast.FunctionDef] | None = None,
+        entry_chain: tuple[str, ...] = (),
+        recursion_visited: set[tuple[str, frozenset[str]]] | None = None,
+    ) -> None:
         self.function_name = function_name
         self.tainted = set(param_names)
-        self.findings: list[tuple[int, str, str]] = []
+        self.local_functions = local_functions or {}
+        self.entry_chain = entry_chain or (function_name,)
+        self.recursion_visited = recursion_visited if recursion_visited is not None else set()
+        self.findings: list[tuple[int, str, str, tuple[str, ...]]] = []
 
     def _is_tainted_expr(self, node: ast.expr | None) -> bool:
         if node is None:
@@ -175,7 +190,40 @@ class _TaintWalker(ast.NodeVisitor):
         return False
 
     def _record_finding(self, lineno: int, message_kind: str, sink_kind: str) -> None:
-        self.findings.append((lineno, message_kind, sink_kind))
+        self.findings.append((lineno, message_kind, sink_kind, self.entry_chain))
+
+    def _compute_callee_tainted_params(
+        self, call: ast.Call, callee: ast.FunctionDef | ast.AsyncFunctionDef
+    ) -> set[str]:
+        """Given a callsite + a callee definition, return the set of callee
+        parameter names that become tainted (positional + keyword binding).
+
+        Conservative: if callee has *args / **kwargs, we cannot determine the
+        binding cleanly — return empty set (skip recursion). Same if the
+        callsite uses a starred arg.
+        """
+        if callee.args.vararg or callee.args.kwarg:
+            return set()
+        positional_params = list(callee.args.posonlyargs) + list(callee.args.args)
+        positional_names = [a.arg for a in positional_params]
+        kwonly_names = {a.arg for a in callee.args.kwonlyargs}
+
+        tainted_params: set[str] = set()
+        for i, arg in enumerate(call.args):
+            if isinstance(arg, ast.Starred):
+                return set()  # can't bind cleanly
+            if i >= len(positional_names):
+                break
+            if self._is_tainted_expr(arg):
+                tainted_params.add(positional_names[i])
+
+        for kw in call.keywords:
+            if kw.arg is None:
+                continue  # **kwargs spread; skip
+            if kw.arg in positional_names or kw.arg in kwonly_names:
+                if self._is_tainted_expr(kw.value):
+                    tainted_params.add(kw.arg)
+        return tainted_params
 
     def visit_Assign(self, node: ast.Assign) -> None:
         if self._is_tainted_expr(node.value):
@@ -205,6 +253,33 @@ class _TaintWalker(ast.NodeVisitor):
         sink = _classify_call(node)
         if sink is not None:
             self._maybe_record_call(node, sink)
+
+        # Cross-function (v0.4): if the call target is a known local function
+        # and at least one tainted arg is passed, walk the callee body with
+        # that tainted set. Skip helpers we've already analyzed with the same
+        # tainted shape (prevents infinite recursion through mutual calls).
+        if self.local_functions and isinstance(node.func, ast.Name):
+            callee_name = node.func.id
+            callee_node = self.local_functions.get(callee_name)
+            if (
+                callee_node is not None
+                and callee_name not in self.entry_chain  # no direct recursion
+            ):
+                tainted_callee_params = self._compute_callee_tainted_params(node, callee_node)
+                key = (callee_name, frozenset(tainted_callee_params))
+                if tainted_callee_params and key not in self.recursion_visited:
+                    self.recursion_visited.add(key)
+                    sub = _TaintWalker(
+                        function_name=callee_name,
+                        param_names=tainted_callee_params,
+                        local_functions=self.local_functions,
+                        entry_chain=self.entry_chain + (callee_name,),
+                        recursion_visited=self.recursion_visited,
+                    )
+                    for child in callee_node.body:
+                        sub.visit(child)
+                    self.findings.extend(sub.findings)
+
         # always recurse — nested call might also be a sink
         self.generic_visit(node)
 
@@ -244,35 +319,47 @@ class _TaintWalker(ast.NodeVisitor):
 
 def _build_finding(
     path: Path,
-    function_name: str,
+    entry_chain: tuple[str, ...],
     line: int,
     message_kind: str,
     sink_kind: str,
 ) -> Finding:
+    # entry_chain[0] is the @mcp.tool() entry; later entries are helpers
+    # the taint passed through to reach the sink. via_clause is empty for
+    # the direct (v0.3) case so existing messages are unchanged.
+    entry_name = entry_chain[0]
+    via_helpers = entry_chain[1:]
+    via_clause = (
+        f" (taint flows via helper{'s' if len(via_helpers) > 1 else ''} "
+        f"{' -> '.join(via_helpers)})"
+        if via_helpers
+        else ""
+    )
+
     if message_kind == "os_shell":
         message = (
-            f"tool '{function_name}' passes a tainted value (flowing from a "
+            f"tool '{entry_name}'{via_clause} passes a tainted value (flowing from a "
             f"tool parameter) into an `os.system` / `os.popen` call. These "
             "functions always invoke the shell, so the model can emit metacharacters "
             "(`;`, `&&`, backticks, redirects) and execute arbitrary commands."
         )
     elif message_kind == "shell_true":
         message = (
-            f"tool '{function_name}' calls `subprocess.*` with `shell=True` and "
+            f"tool '{entry_name}'{via_clause} calls `subprocess.*` with `shell=True` and "
             "a tainted value flowing from a tool parameter. The shell parses the "
             "whole command string, so anything the model emits as a metacharacter "
             "or chained command will execute."
         )
     elif message_kind == "tainted_interpolation":
         message = (
-            f"tool '{function_name}' calls `subprocess.*` with the command built "
+            f"tool '{entry_name}'{via_clause} calls `subprocess.*` with the command built "
             "as an f-string or string-concat containing a tool parameter. Even "
             "without explicit `shell=True`, this pattern is fragile (a single-string "
             "argv is parsed shell-like in many setups) and is the canonical shape "
             "of command-injection bugs in CLI-wrapping MCP servers."
         )
     else:
-        message = f"tool '{function_name}' passes tainted input into a shell sink."
+        message = f"tool '{entry_name}'{via_clause} passes tainted input into a shell sink."
 
     remediation = (
         "Pass arguments as a list and never use `shell=True`: "
@@ -300,6 +387,15 @@ def _check_file(path: Path) -> list[Finding]:
     except (OSError, SyntaxError):
         return []
 
+    # v0.4: build a same-file function map so cross-function taint can recurse
+    # into helpers. We use setdefault so a later same-name def doesn't shadow
+    # an earlier one in a multi-def file (matches "first def wins" semantics
+    # in our analysis, which avoids the edge case of decorator-replaced names).
+    local_functions: dict[str, ast.FunctionDef] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            local_functions.setdefault(node.name, node)
+
     findings: list[Finding] = []
     for node in ast.walk(tree):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -312,10 +408,16 @@ def _check_file(path: Path) -> list[Finding]:
         if not param_names:
             continue
 
-        walker = _TaintWalker(function_name=node.name, param_names=param_names)
+        # Each tool entry gets its own recursion_visited set — a helper may
+        # be reachable from multiple entries with different tainted shapes.
+        walker = _TaintWalker(
+            function_name=node.name,
+            param_names=param_names,
+            local_functions=local_functions,
+        )
         walker.visit(node)
-        for line, message_kind, sink_kind in walker.findings:
-            findings.append(_build_finding(path, node.name, line, message_kind, sink_kind))
+        for line, message_kind, sink_kind, entry_chain in walker.findings:
+            findings.append(_build_finding(path, entry_chain, line, message_kind, sink_kind))
 
     return findings
 
