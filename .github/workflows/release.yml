@@ -1,0 +1,61 @@
+name: Release mcp-audit to PyPI
+
+# Triggers on any tag pushed to mcpdone-samples that starts with "mcp-audit-v"
+# (e.g. mcp-audit-v0.5, mcp-audit-v0.5.1). The tag prefix lets future sibling
+# packages in this monorepo use their own tag namespace without collision.
+#
+# Publishing is via PyPI Trusted Publishing (OIDC) — no token needed in the
+# repo, no secret rotation. Prerequisite: a pending publisher must be configured
+# at https://pypi.org/manage/account/publishing/ with:
+#   Project name: mcp-audit
+#   Owner: Alienbushman
+#   Repository name: mcpdone-samples
+#   Workflow name: release.yml
+#   Environment name: (leave blank — this workflow does not gate on an env)
+#
+# Cutting a release:
+#   cd mcp-audit && # bump version in pyproject.toml + src/mcp_audit/__init__.py
+#   git commit -am "mcp-audit v0.X release"
+#   git tag mcp-audit-v0.X
+#   git push origin master --tags
+
+on:
+  push:
+    tags:
+      - "mcp-audit-v*"
+
+jobs:
+  release:
+    name: Build + publish mcp-audit
+    runs-on: ubuntu-latest
+
+    # OIDC permissions — required for PyPI trusted publishing.
+    permissions:
+      id-token: write
+      contents: read
+
+    defaults:
+      run:
+        working-directory: mcp-audit
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Install deps + run pytest before publishing
+        run: |
+          uv sync --all-extras --dev
+          uv run pytest -q
+
+      - name: Build sdist + wheel
+        run: uv build
+
+      - name: Publish to PyPI (trusted publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: mcp-audit/dist
+          # No `password:` field — the action picks up the OIDC token
+          # via the id-token: write permission above.
