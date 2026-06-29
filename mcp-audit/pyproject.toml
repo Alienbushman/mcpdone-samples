@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mcp-audit"
-version = "0.4.0"
-description = "Static security + correctness audit for MCP server repos. Ships four checks; v0.4 extends command_injection with same-file cross-function taint propagation (catches tool -> helper -> sink flows that v0.3's single-function walker missed)."
+version = "0.5.0"
+description = "Static security + correctness audit for MCP server repos. Ships four checks. v0.5 fixes a v0.4 false-positive family where list-concatenation (e.g. `[\"kubectl\"] + args + [\"get\"]`) was misclassified as string-interpolation in command_injection."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }

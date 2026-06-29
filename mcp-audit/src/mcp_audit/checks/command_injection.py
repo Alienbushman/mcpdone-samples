@@ -108,13 +108,36 @@ def _has_shell_true(call: ast.Call) -> bool:
     return False
 
 
+def _is_list_or_tuple_shape(node: ast.expr) -> bool:
+    """True if `node` is a Python list or tuple literal at runtime —
+    either directly (`[...]` / `(...,)`) or as a BinOp(Add) chain where
+    any direct operand is a list/tuple literal.
+
+    The motivating case: `["kubectl"] + ctx_args + ["get"]`. Python's `+`
+    on two list operands is list-concatenation, not string-concatenation;
+    confusing the two produces the kubectl-mcp-server v0.4 false-positives
+    family. Bug discovered 2026-06-28 via the disclosure-prep workflow."""
+    if isinstance(node, (ast.List, ast.Tuple)):
+        return True
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _is_list_or_tuple_shape(node.left) or _is_list_or_tuple_shape(node.right)
+    return False
+
+
 def _is_string_interpolation(node: ast.expr) -> bool:
     """True if this expr is an f-string or a string-concatenation BinOp
-    or a .format()/.join() call producing a string with substitutions."""
+    or a .format()/.join() call producing a string with substitutions.
+
+    Specifically excludes list/tuple-concatenation BinOps, which look
+    identical to string concat at the AST level but produce a list, not
+    a string."""
     if isinstance(node, ast.JoinedStr):
         return True
     if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
-        # Either side is a string constant or a recursive concat
+        # List/tuple concat (e.g. `["kubectl"] + args + ["get"]`) is NOT
+        # string interpolation. Falls through to string concat otherwise.
+        if _is_list_or_tuple_shape(node):
+            return False
         return True
     if isinstance(node, ast.Call):
         fn = node.func

@@ -12,4 +12,4 @@ from mcp_audit.finding import Finding, Severity
 from mcp_audit.cli import run_all_checks
 
 __all__ = ["Finding", "Severity", "run_all_checks"]
-__version__ = "0.4.0"
+__version__ = "0.5.0"
