@@ -56,8 +56,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="mcp-audit",
         description=(
             "Static security + correctness audit for MCP server repos. "
-            "Currently ships BadHost (Starlette) and FastMCP wrapper-layer "
-            "checks."
+            f"Checks: {', '.join(CHECKS.keys())}."
         ),
     )
     parser.add_argument(

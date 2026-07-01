@@ -3,7 +3,7 @@
 Static security + correctness audit for MCP server repos.
 
 ```bash
-pip install mcp-audit
+pip install mcpdone-audit     # PyPI distribution (the plain 'mcp-audit' name is squatted; PEP 541 blocks it)
 mcp-audit                     # scan the current directory
 mcp-audit /path/to/repo       # scan a specific repo
 mcp-audit --json              # machine-readable output
