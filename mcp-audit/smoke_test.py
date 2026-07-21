@@ -67,9 +67,12 @@ def main() -> int:
     except (json.JSONDecodeError, KeyError) as exc:
         failures.append(f"bad_server/: --json output didn't parse: {exc}\n{out}")
 
-    # 4. --list-checks should exit 0 with all three v0.2 checks named.
+    # 4. --list-checks should exit 0 with every registered check named.
     code, out, _ = run_cli(["--list-checks"])
-    for check_name in ("starlette_badhost", "fastmcp_wrapper_layer", "tool_input_validation"):
+    for check_name in (
+        "starlette_badhost", "fastmcp_wrapper_layer", "tool_input_validation",
+        "command_injection", "destructive_fs_sink",
+    ):
         if check_name not in out:
             failures.append(f"--list-checks: missing {check_name} (got {out!r})")
     if code != 0:

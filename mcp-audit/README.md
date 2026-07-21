@@ -3,7 +3,7 @@
 Static security + correctness audit for MCP server repos.
 
 ```bash
-pip install mcpdone-audit     # PyPI distribution (the plain 'mcp-audit' name is squatted; PEP 541 blocks it)
+pip install mcp-audit
 mcp-audit                     # scan the current directory
 mcp-audit /path/to/repo       # scan a specific repo
 mcp-audit --json              # machine-readable output
@@ -21,8 +21,9 @@ Exit codes: **0** clean, **1** at least one finding, **2** usage error.
 | `fastmcp_wrapper_layer`   | HIGH       | Sync `@mcp.tool()` functions that call `asyncio.run(...)` inside their body. FastMCP invokes tools inside an already-running event loop; `asyncio.run()` raises `RuntimeError`. Looks fine in unit tests, dies on the first real protocol call. |
 | `tool_input_validation`   | LOW        | `@mcp.tool()` parameters typed as bare `str` / `bytes` / `Any` / `list[Any]` / `dict[..., Any]` or with no annotation at all. The schema FastMCP exposes to the LLM is the substrate prompt-injection-via-tool-description attacks rely on; constraining it (`Annotated[str, Field(max_length=N)]`, `Literal[...]`, Pydantic models) closes the window without losing expressiveness. Hygiene check, not a CVE — expect findings even on well-written servers. *Added in v0.2.* |
 | `command_injection`       | HIGH       | `@mcp.tool()` functions where a tool parameter (or a local tainted via assignment / `.format()` / string concat) flows into `os.system`, `os.popen`, or `subprocess.*` with `shell=True` or a tainted-interpolated command string. **v0.4 added same-file cross-function taint propagation**: the analyzer now follows local helper calls (positional + keyword binding, recursion-visited guard), so `tool -> helper -> sink` flows are caught. Cross-file taint remains out of scope. The list-of-args / no-shell pattern is correctly NOT flagged. *Added in v0.3, cross-function in v0.4.* |
+| `destructive_fs_sink`     | MEDIUM     | `@mcp.tool()` functions where a tool parameter flows into a destructive filesystem call — `shutil.rmtree`, `os.remove` / `os.unlink` / `os.rmdir` / `os.removedirs`, or `Path.unlink()` / `Path.rmdir()` — with no path-containment guard, letting a caller delete arbitrary paths the server can reach. Suppressed when the function canonicalizes-and-confines the path (`realpath`/`resolve` + `startswith`/`relative_to`) or checks it against a server-managed allow-set — a deliberate false-negative bias. Found the unguarded `shutil.rmtree(directory)` in `manim-mcp-server`'s `cleanup_manim_temp_dir` that the other four checks all miss. *Added in v0.7.* |
 
-More checks are landing — hard-coded secrets, write-API tools missing a `FORBIDDEN_NAMES`-style guardrail, read-only-by-default violations, path traversal in filesystem-touching servers.
+More checks are landing — hard-coded secrets, write-API tools missing a `FORBIDDEN_NAMES`-style guardrail, read-only-by-default violations (e.g. SQL read-only enforced by keyword prefix rather than a real read-only connection), path traversal in filesystem-touching servers.
 
 ## Output format
 
