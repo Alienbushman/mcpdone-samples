@@ -43,6 +43,31 @@ mcp-audit: 2 finding(s) — 2 high
 
 `--json` emits one object: `{"root": "...", "finding_count": N, "findings": [...]}`. Each finding has `check`, `severity`, `path`, `line`, `message`, `remediation`.
 
+## Use in CI (GitHub Action)
+
+Drop MCP security scanning into any repo's CI. The job fails on findings (exit 1); flip `fail-on-findings` for a report-only gate.
+
+```yaml
+# .github/workflows/mcp-audit.yml
+name: mcp-audit
+on: [push, pull_request]
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: Alienbushman/mcpdone-samples/mcp-audit@master
+        with:
+          path: .                 # dir to scan (default '.')
+          # version: 0.8.0        # pin the mcpdone-audit release (default: latest)
+          # args: --check command_injection
+          # fail-on-findings: false   # report-only: annotate but keep the job green
+```
+
+The action exposes a `finding-count` output for downstream steps. It wraps the same `mcpdone-audit` PyPI package, so local runs and CI runs are identical. Prefer pinning `version:` in CI for reproducibility.
+
+You can also run it via [pre-commit](https://pre-commit.com/) or as a plain `pip install mcpdone-audit && mcp-audit` step in any pipeline.
+
 ## What this is not
 
 - It is **not** a runtime sandbox. Static analysis only.

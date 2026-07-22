@@ -1,0 +1,72 @@
+name: "mcp-audit"
+description: "Static security + correctness audit for MCP server repos. Fails CI on findings (configurable). Wraps the mcpdone-audit PyPI package."
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  path:
+    description: "Directory or repo to scan."
+    required: false
+    default: "."
+  version:
+    description: "mcpdone-audit version to install (e.g. 0.8.0). Empty installs the latest."
+    required: false
+    default: ""
+  args:
+    description: "Extra args passed to mcp-audit (e.g. '--check command_injection')."
+    required: false
+    default: ""
+  fail-on-findings:
+    description: "Fail the job when any finding is reported. Set 'false' for report-only mode."
+    required: false
+    default: "true"
+  python-version:
+    description: "Python version to run mcp-audit under."
+    required: false
+    default: "3.12"
+
+outputs:
+  finding-count:
+    description: "Number of findings reported by the scan."
+    value: ${{ steps.scan.outputs.finding-count }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install mcpdone-audit
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.version }}" ]; then
+          python -m pip install --quiet "mcpdone-audit==${{ inputs.version }}"
+        else
+          python -m pip install --quiet mcpdone-audit
+        fi
+        echo "installed: $(python -m pip show mcpdone-audit | awk '/^Version:/{print $2}')"
+
+    - name: Run mcp-audit
+      id: scan
+      shell: bash
+      run: |
+        set +e
+        # Human-readable output to the job log.
+        mcp-audit "${{ inputs.path }}" ${{ inputs.args }}
+        code=$?
+        # Machine-readable pass to extract the finding count for the output.
+        count=$(mcp-audit "${{ inputs.path }}" ${{ inputs.args }} --json 2>/dev/null \
+                | python -c "import sys,json; print(json.load(sys.stdin).get('finding_count',0))" 2>/dev/null || echo 0)
+        echo "finding-count=$count" >> "$GITHUB_OUTPUT"
+        echo "::notice title=mcp-audit::$count finding(s) (exit $code)"
+        if [ "$code" -eq 2 ]; then
+          echo "::error title=mcp-audit::usage error (exit 2)"
+          exit 2
+        fi
+        if [ "$code" -eq 1 ] && [ "${{ inputs.fail-on-findings }}" = "true" ]; then
+          exit 1
+        fi
+        exit 0

@@ -1,0 +1,74 @@
+name: mcp-audit action self-test
+
+on:
+  push:
+    paths:
+      - "mcp-audit/action.yml"
+      - ".github/workflows/mcp-audit-action-selftest.yml"
+  pull_request:
+    paths:
+      - "mcp-audit/action.yml"
+  workflow_dispatch:
+
+jobs:
+  fails-on-findings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        continue-on-error: true
+        uses: ./mcp-audit
+        with:
+          path: mcp-audit/tests/fixtures/command_injection_bad
+      - name: assert the action failed the job and counted findings
+        shell: bash
+        run: |
+          test "${{ steps.scan.outcome }}" = "failure" || { echo "FAIL: expected the action to fail on findings"; exit 1; }
+          test "${{ steps.scan.outputs.finding-count }}" -ge 1 || { echo "FAIL: expected >=1 findings"; exit 1; }
+          echo "OK: action failed with ${{ steps.scan.outputs.finding-count }} finding(s)"
+
+  report-only-passes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./mcp-audit
+        with:
+          path: mcp-audit/tests/fixtures/command_injection_bad
+          fail-on-findings: "false"
+      - name: assert report-only stayed green but still counted findings
+        shell: bash
+        run: |
+          test "${{ steps.scan.outputs.finding-count }}" -ge 1 || { echo "FAIL: expected >=1 findings"; exit 1; }
+          echo "OK: report-only mode, ${{ steps.scan.outputs.finding-count }} finding(s), job green"
+
+  clean-passes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./mcp-audit
+        with:
+          path: mcp-audit/tests/fixtures/good
+      - name: assert clean fixture reports zero and passes
+        shell: bash
+        run: |
+          test "${{ steps.scan.outputs.finding-count }}" = "0" || { echo "FAIL: expected 0 findings"; exit 1; }
+          echo "OK: clean fixture, 0 findings, job green"
+
+  single-check-filter:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        continue-on-error: true
+        uses: ./mcp-audit
+        with:
+          path: mcp-audit/tests/fixtures/sql_readonly_bad
+          args: "--check sql_readonly_keyword_guard"
+      - name: assert the --check filter works and flags the read-only bypass
+        shell: bash
+        run: |
+          test "${{ steps.scan.outcome }}" = "failure" || { echo "FAIL: expected failure"; exit 1; }
+          test "${{ steps.scan.outputs.finding-count }}" = "2" || { echo "FAIL: expected exactly 2 (both keyword-guarded tools), got ${{ steps.scan.outputs.finding-count }}"; exit 1; }
+          echo "OK: --check filter -> 2 sql_readonly findings"
