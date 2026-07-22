@@ -57,11 +57,15 @@ runs:
         # Human-readable output to the job log.
         mcp-audit "${{ inputs.path }}" ${{ inputs.args }}
         code=$?
-        # Machine-readable pass to extract the finding count for the output.
-        count=$(mcp-audit "${{ inputs.path }}" ${{ inputs.args }} --json 2>/dev/null \
-                | python -c "import sys,json; print(json.load(sys.stdin).get('finding_count',0))" 2>/dev/null || echo 0)
-        echo "finding-count=$count" >> "$GITHUB_OUTPUT"
-        echo "::notice title=mcp-audit::$count finding(s) (exit $code)"
+        # Machine-readable pass to a file (NOT a pipe: GitHub's shell runs with
+        # pipefail, and mcp-audit exits 1 on findings, which would otherwise
+        # corrupt the captured value). --json writes the object; exit code is
+        # the same 0/1/2 and is captured above from the human run.
+        mcp-audit "${{ inputs.path }}" ${{ inputs.args }} --json > mcp_audit_out.json 2>/dev/null || true
+        count=$(python -c "import json; print(json.load(open('mcp_audit_out.json')).get('finding_count', 0))" 2>/dev/null || echo 0)
+        rm -f mcp_audit_out.json
+        printf 'finding-count=%s\n' "$count" >> "$GITHUB_OUTPUT"
+        echo "::notice title=mcp-audit::${count} finding(s) (exit ${code})"
         if [ "$code" -eq 2 ]; then
           echo "::error title=mcp-audit::usage error (exit 2)"
           exit 2
