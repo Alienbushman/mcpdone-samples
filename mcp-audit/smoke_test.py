@@ -71,7 +71,7 @@ def main() -> int:
     code, out, _ = run_cli(["--list-checks"])
     for check_name in (
         "starlette_badhost", "fastmcp_wrapper_layer", "tool_input_validation",
-        "command_injection", "destructive_fs_sink",
+        "command_injection", "destructive_fs_sink", "sql_readonly_keyword_guard",
     ):
         if check_name not in out:
             failures.append(f"--list-checks: missing {check_name} (got {out!r})")

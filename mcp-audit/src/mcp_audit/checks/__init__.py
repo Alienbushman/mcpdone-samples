@@ -5,6 +5,7 @@ from mcp_audit.checks import (
     command_injection,
     destructive_fs_sink,
     fastmcp_wrapper_layer,
+    sql_readonly_keyword_guard,
     starlette_badhost,
     tool_input_validation,
 )
@@ -15,6 +16,7 @@ CHECKS = {
     tool_input_validation.CHECK_ID: tool_input_validation.check,
     command_injection.CHECK_ID: command_injection.check,
     destructive_fs_sink.CHECK_ID: destructive_fs_sink.check,
+    sql_readonly_keyword_guard.CHECK_ID: sql_readonly_keyword_guard.check,
 }
 
 __all__ = ["CHECKS"]
