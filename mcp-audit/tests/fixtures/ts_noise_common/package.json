@@ -1,0 +1,9 @@
+{
+  "name": "noise-common-fixture",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.24.0",
+    "zod": "^4.0.0"
+  }
+}
