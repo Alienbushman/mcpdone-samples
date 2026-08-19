@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Alienbushman/mcpdone-samples/mcp-audit@master
+      - uses: Alienbushman/mcpdone-samples/mcp-audit@mcp-audit-v0.9
         with:
           path: .                 # dir to scan (default '.')
           # version: 0.8.0        # pin the mcpdone-audit release (default: latest)
