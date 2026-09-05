@@ -111,11 +111,23 @@ jobs:
         with:
           path: .                 # dir to scan (default '.')
           # version: 0.8.0        # pin the mcpdone-audit release (default: latest)
+          # package: ./mcp-audit  # any pip spec: local path, VCS ref, private mirror
           # args: --check command_injection
           # fail-on-findings: false   # report-only: annotate but keep the job green
 ```
 
 The action exposes a `finding-count` output for downstream steps. It wraps the same `mcpdone-audit` PyPI package, so local runs and CI runs are identical. Prefer pinning `version:` in CI for reproducibility.
+
+A scan that examines **0 files** fails the job (exit 3) even with
+`fail-on-findings: false`, because a green check that read nothing is worse
+than a red one. Pass `--allow-empty` via `args` where that is expected.
+
+`package:` overrides `version:` and takes any pip install spec. It exists
+because the action installs from PyPI by default, which means nothing can
+exercise a fix that has not been released yet. This repo's own self-test
+hit exactly that: three new assertions failed against the published 0.9.0
+while the repo was already fixed. Same shape as the bug above, one layer
+out.
 
 You can also run it via [pre-commit](https://pre-commit.com/) or as a plain `pip install mcpdone-audit && mcp-audit` step in any pipeline.
 

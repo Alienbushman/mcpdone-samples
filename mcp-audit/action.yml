@@ -13,6 +13,15 @@ inputs:
     description: "mcpdone-audit version to install (e.g. 0.8.0). Empty installs the latest."
     required: false
     default: ""
+  package:
+    description: >-
+      Any pip install spec to use instead of the PyPI package: a local path
+      ('./mcp-audit'), a VCS ref, or a private mirror. Takes precedence over
+      'version'. Exists because the action installs from PyPI by default, so
+      without this seam nothing can exercise a fix that has not been released
+      yet - including this repo's own self-test.
+    required: false
+    default: ""
   args:
     description: "Extra args passed to mcp-audit (e.g. '--check command_injection')."
     required: false
@@ -42,7 +51,9 @@ runs:
     - name: Install mcpdone-audit
       shell: bash
       run: |
-        if [ -n "${{ inputs.version }}" ]; then
+        if [ -n "${{ inputs.package }}" ]; then
+          python -m pip install --quiet "${{ inputs.package }}"
+        elif [ -n "${{ inputs.version }}" ]; then
           python -m pip install --quiet "mcpdone-audit==${{ inputs.version }}"
         else
           python -m pip install --quiet mcpdone-audit

@@ -6,6 +6,7 @@ on:
       - "mcp-audit/action.yml"
       - ".github/workflows/mcp-audit-action-selftest.yml"
       - "mcp-audit/tests/fixtures/no_auditable_code/**"
+      - "mcp-audit/src/**"
   pull_request:
     paths:
       - "mcp-audit/action.yml"
@@ -66,6 +67,7 @@ jobs:
         uses: ./mcp-audit
         with:
           path: mcp-audit/tests/fixtures/no_auditable_code
+          package: ./mcp-audit
       - name: assert a scan that examined nothing fails rather than passing
         shell: bash
         run: |
@@ -82,6 +84,7 @@ jobs:
         with:
           path: mcp-audit/tests/fixtures/no_auditable_code
           fail-on-findings: "false"
+          package: ./mcp-audit
       - name: assert report-only does not soften an empty scan
         shell: bash
         run: |
@@ -97,6 +100,7 @@ jobs:
         with:
           path: mcp-audit/tests/fixtures/no_auditable_code
           args: "--allow-empty"
+          package: ./mcp-audit
       - name: assert --allow-empty is the documented opt-out
         shell: bash
         run: |
