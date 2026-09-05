@@ -151,10 +151,6 @@ from mcp_audit.jsparse import ObjectLiteral, Source
 
 CHECK_ID = "ts_dns_rebinding"
 
-_SKIP_DIRS = {
-    ".venv", "venv", "env", "node_modules", ".git", "site-packages",
-    ".tox", ".nox", "build", "dist", "__pycache__",
-}
 
 # SDK transport classes that speak HTTP. `StdioServerTransport` is absent on
 # purpose: the advisory does not affect stdio, and a stdio-only server must
@@ -746,8 +742,6 @@ def _shadowed_transport_names(src: Source) -> set[str]:
     return other_bound - mcp_bound
 
 
-def _should_skip(path: Path) -> bool:
-    return any(part in _SKIP_DIRS for part in path.parts)
 
 
 def _file_imports_mcp_sdk(src: Source) -> bool:
@@ -935,11 +929,9 @@ def _sites(src: Source) -> list[_Site]:
     return out
 
 
-def check(root: Path) -> list[Finding]:
+def check(root: Path, *, include_build: bool = False) -> list[Finding]:
     sources: list[Source] = []
-    for path in jsparse.iter_source_files(root):
-        if _should_skip(path):
-            continue
+    for path in jsparse.iter_source_files(root, include_build=include_build):
         src = jsparse.load(path)
         # HARD contract: a file the lexer could not walk is unusable, and a
         # degraded lex must never produce a finding.

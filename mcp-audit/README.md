@@ -11,7 +11,36 @@ mcp-audit --check fastmcp_wrapper_layer  # one check only
 mcp-audit --list-checks       # list available checks
 ```
 
-Exit codes: **0** clean, **1** at least one finding, **2** usage error.
+Exit codes: **0** clean, **1** at least one finding, **2** usage error, **3** nothing examined.
+
+### "0 findings" is not the same as "0 files"
+
+A scanner that cannot tell those apart is worse than no scanner, because it
+issues a clean bill of health for code it never opened. `mcp-audit` has
+shipped that bug twice, so it now reports how many files it read and exits
+**3** when that number is zero:
+
+```
+$ mcp-audit ./docs
+mcp-audit: examined 0 files under ./docs - nothing here to audit. This is NOT
+a clean result: no Python or TypeScript source and no dependency manifest was
+found. Check the path, or pass --allow-empty if that is expected.
+
+$ mcp-audit ./server
+mcp-audit: OK - 0 findings across 34 file(s) under ./server
+```
+
+Pass `--allow-empty` to exit 0 instead, where a repo legitimately holds no
+auditable code. In the GitHub Action, exit 3 fails the job *even in
+report-only mode*: a green check that read nothing is the worst result the
+action can produce.
+
+Related: build directories (`dist`, `build`, `out`) are skipped as generated
+residue, **unless nothing else is there**. A published npm package ships
+`package/dist/*.js` and no sources at all, so pointing `mcp-audit` at an
+extracted tarball scans the compiled output and says so. Because the
+fallback is reachable only from an otherwise-empty scan, it can never add
+noise to a repo that has real sources.
 
 ## What it checks
 
@@ -57,10 +86,13 @@ $ mcp-audit examples/bad/
            tool 'fetch_url' (def) calls asyncio.run() inside its body. FastMCP invokes tools inside an already-running event loop, and asyncio.run() raises RuntimeError when nested. This will fail at the first real MCP protocol call even if every unit test passes.
            -> Convert the tool to `async def` and replace `asyncio.run(...)` with `await`. ...
 
-mcp-audit: 2 finding(s) — 2 high
+mcp-audit: 2 finding(s) — 2 high across 11 file(s)
 ```
 
-`--json` emits one object: `{"root": "...", "finding_count": N, "findings": [...]}`. Each finding has `check`, `severity`, `path`, `line`, `message`, `remediation`.
+`--json` emits one object: `{"root": "...", "finding_count": N, "files_examined": N, "scanned_build_output": false, "findings": [...]}`. Each finding has `check`, `severity`, `path`, `line`, `message`, `remediation`.
+
+`files_examined` is there so a consumer can assert the scan actually read
+something rather than trusting `finding_count: 0`.
 
 ## Use in CI (GitHub Action)
 

@@ -30,6 +30,7 @@ from pathlib import Path
 from packaging.specifiers import InvalidSpecifier, SpecifierSet
 from packaging.version import InvalidVersion, Version
 
+from mcp_audit import discovery
 from mcp_audit.finding import Finding, Severity
 
 CHECK_ID = "starlette_badhost"
@@ -232,43 +233,30 @@ def _make_finding(
     )
 
 
-def check(root: Path) -> list[Finding]:
+def check(root: Path, *, include_build: bool = False) -> list[Finding]:
     findings: list[Finding] = []
 
+    def _keep(path: Path) -> bool:
+        return not discovery.is_skipped(path, root, include_build=include_build)
+
     for pyproj in root.rglob("pyproject.toml"):
-        if _should_skip(pyproj):
+        if not _keep(pyproj):
             continue
         findings.extend(_check_pyproject(pyproj))
 
     for req in root.rglob("requirements*.txt"):
-        if _should_skip(req):
+        if not _keep(req):
             continue
         findings.extend(_check_requirements_txt(req))
 
     lock_specs = [("uv.lock", "uv"), ("poetry.lock", "poetry"), ("pdm.lock", "pdm")]
     for name, eco in lock_specs:
         for lock in root.rglob(name):
-            if _should_skip(lock):
+            if not _keep(lock):
                 continue
             findings.extend(_check_lockfile(lock, ecosystem=eco))
 
     return findings
 
 
-_SKIP_DIRS = {
-    ".venv",
-    "venv",
-    "env",
-    "node_modules",
-    ".git",
-    "site-packages",
-    ".tox",
-    ".nox",
-    "build",
-    "dist",
-    "__pycache__",
-}
 
-
-def _should_skip(path: Path) -> bool:
-    return any(part in _SKIP_DIRS for part in path.parts)

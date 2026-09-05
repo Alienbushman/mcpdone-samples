@@ -38,14 +38,11 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from mcp_audit import discovery
 from mcp_audit.finding import Finding, Severity
 
 CHECK_ID = "sql_readonly_keyword_guard"
 
-_SKIP_DIRS = {
-    ".venv", "venv", "env", "node_modules", ".git", "site-packages",
-    ".tox", ".nox", "build", "dist", "__pycache__",
-}
 
 # SQL execution sink method names (attribute calls) + the SQLAlchemy text() ctor.
 _SQL_EXEC_ATTRS = {"execute", "executescript", "executemany", "exec_driver_sql", "scalar", "scalars"}
@@ -62,8 +59,6 @@ _SQL_KEYWORDS = {
 }
 
 
-def _should_skip(path: Path) -> bool:
-    return any(part in _SKIP_DIRS for part in path.parts)
 
 
 def _is_mcp_tool_decorator(decorator: ast.expr) -> bool:
@@ -200,10 +195,10 @@ def _check_file(path: Path) -> list[Finding]:
     return findings
 
 
-def check(root: Path) -> list[Finding]:
+def check(root: Path, *, include_build: bool = False) -> list[Finding]:
     findings: list[Finding] = []
-    for py in root.rglob("*.py"):
-        if _should_skip(py):
-            continue
+    for py in discovery.iter_files(
+        root, discovery.PY_EXTENSIONS, include_build=include_build
+    ):
         findings.extend(_check_file(py))
     return findings

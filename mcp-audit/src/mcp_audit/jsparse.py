@@ -65,34 +65,24 @@ from collections.abc import Collection, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from mcp_audit import discovery
+
 # --------------------------------------------------------------------------
 # File discovery constants (design §2). Exported so the check modules can
 # reuse them instead of re-typing the set.
 #
-# NOTE FOR CHECK IMPLEMENTERS: this skip set contains "test", "tests",
-# "fixtures", "examples". `iter_source_files` prunes them during an os.walk
-# that STARTS AT `root`, so components ABOVE root are never examined — a
-# check invoked with root=tests/fixtures/ts_noise_common still sees its
-# files. If you copy this set into a module-level `_should_skip(path)` that
-# tests `path.parts`, every one of your own fixtures becomes invisible and
-# your tests will pass vacuously. Test `path.relative_to(root).parts`, or
-# keep your local copy limited to the six Python checks' house set.
+# NOTE FOR CHECK IMPLEMENTERS: do not copy this set into a local
+# `_should_skip(path)`. Every check used to, testing `path.parts` on the
+# ABSOLUTE path, which silently blanked any repo living under a directory
+# named `dist`, `build` or `env`. Discovery now lives in one place,
+# mcp_audit.discovery, and prunes relative to `root` -- so a check invoked
+# with root=tests/fixtures/ts_noise_common still sees its own files.
 # --------------------------------------------------------------------------
 TS_EXTENSIONS: frozenset[str] = frozenset(
     {".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"}
 )
 
-TS_SKIP_DIRS: frozenset[str] = frozenset({
-    # house set (identical to the other six checks)
-    ".venv", "venv", "env", "node_modules", ".git", "site-packages",
-    ".tox", ".nox", "build", "dist", "__pycache__",
-    # TS/JS additions: compiled output, caches, vendored trees
-    "out", "coverage", ".next", ".nuxt", ".svelte-kit", ".turbo",
-    ".vercel", ".cache", "bower_components", "vendor",
-    # test / example trees
-    "test", "tests", "__tests__", "__mocks__", "e2e", "fixtures",
-    "examples", "example", "demo", "benchmark", "benchmarks", "evals",
-})
+TS_SKIP_DIRS: frozenset[str] = discovery.skip_dirs_for(typescript=True)
 
 # Marker returned as `CallSite.receiver` / `.root` when the callee is a
 # member of something that is not a plain identifier chain — `foo().rm(x)`,
@@ -538,7 +528,7 @@ def _is_excluded_filename(path: Path) -> bool:
     return False
 
 
-def iter_source_files(root: Path) -> Iterator[Path]:
+def iter_source_files(root: Path, *, include_build: bool = False) -> Iterator[Path]:
     """Yield analyzable TS/JS files under root, in os-walk order.
 
     Directory pruning starts *at* root, so path components above root are
@@ -552,7 +542,10 @@ def iter_source_files(root: Path) -> Iterator[Path]:
             yield root
         return
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = sorted(d for d in dirnames if d not in TS_SKIP_DIRS)
+        pruned = discovery.skip_dirs_for(
+            typescript=True, include_build=include_build
+        )
+        dirnames[:] = sorted(d for d in dirnames if d not in pruned)
         base = Path(dirpath)
         for name in sorted(filenames):
             p = base / name

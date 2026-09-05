@@ -70,6 +70,15 @@ runs:
           echo "::error title=mcp-audit::usage error (exit 2)"
           exit 2
         fi
+        # Exit 3 means the scan examined zero files. That is a broken scan,
+        # not a clean one, so it fails the job even in report-only mode:
+        # a green check that read nothing is the worst outcome this action
+        # can produce. Pass '--allow-empty' via `args` where a repo
+        # legitimately holds no auditable code.
+        if [ "$code" -eq 3 ]; then
+          echo "::error title=mcp-audit::examined 0 files - check the 'path' input. This is not a clean result. Pass --allow-empty via 'args' if the repo genuinely has no auditable code."
+          exit 1
+        fi
         if [ "$code" -eq 1 ] && [ "${{ inputs.fail-on-findings }}" = "true" ]; then
           exit 1
         fi

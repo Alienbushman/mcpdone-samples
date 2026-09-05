@@ -100,16 +100,10 @@ from mcp_audit import jsparse
 
 CHECK_ID = "ts_destructive_fs_sink"
 
-# House skip set, duplicated per module exactly as the six Python checks do.
-# Deliberately NOT jsparse.TS_SKIP_DIRS: that set contains "tests" /
-# "fixtures" / "examples", and this predicate tests components of an
-# ABSOLUTE path, so using it here would make this check's own fixtures
-# invisible and every test would pass vacuously. `iter_source_files` applies
-# the TS set correctly (pruning relative to root); the two filters compose.
-_SKIP_DIRS = {
-    ".venv", "venv", "env", "node_modules", ".git", "site-packages",
-    ".tox", ".nox", "build", "dist", "__pycache__",
-}
+# File discovery lives in mcp_audit.discovery, applied by
+# `jsparse.iter_source_files` and pruned relative to `root`. The local
+# absolute-path skip set this module used to carry is gone; see discovery.py
+# for why it was a silent-clean hazard.
 
 # Import prefixes that prove this file is MCP server code. Without this gate,
 # `registry.tool(...)` / `observer.tool(...)` in unrelated libraries would be
@@ -182,8 +176,6 @@ _ASSIGN_RE = re.compile(r"(?<![\w$])(?P<name>[A-Za-z_$][\w$]*)\s*\+?=(?![=>])")
 _CASE_RE = re.compile(r"(?<![\w$])case(?![\w$])\s*")
 
 
-def _should_skip(path: Path) -> bool:
-    return any(part in _SKIP_DIRS for part in path.parts)
 
 
 # ==========================================================================
@@ -834,10 +826,8 @@ def _check_file(path: Path) -> list[Finding]:
     return findings
 
 
-def check(root: Path) -> list[Finding]:
+def check(root: Path, *, include_build: bool = False) -> list[Finding]:
     findings: list[Finding] = []
-    for path in jsparse.iter_source_files(root):
-        if _should_skip(path):
-            continue
+    for path in jsparse.iter_source_files(root, include_build=include_build):
         findings.extend(_check_file(path))
     return findings

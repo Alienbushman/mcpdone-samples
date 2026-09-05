@@ -114,17 +114,11 @@ from mcp_audit import jsparse, tstools
 
 CHECK_ID = "ts_command_injection"
 
-# House skip set, duplicated per module as the other six checks do. NOTE the
-# deliberate omission of jsparse.TS_SKIP_DIRS' "test"/"tests"/"fixtures"
-# entries: `_should_skip` matches any component of an ABSOLUTE path, so
-# including them would blank out this check's own fixture directories (and
-# any repo that happens to live under a path component named "examples").
-# `jsparse.iter_source_files` applies the fuller TS set relative to `root`,
-# which is where those exclusions actually belong.
-_SKIP_DIRS = {
-    ".venv", "venv", "env", "node_modules", ".git", "site-packages",
-    ".tox", ".nox", "build", "dist", "__pycache__",
-}
+# File discovery lives in mcp_audit.discovery and is applied by
+# `jsparse.iter_source_files`, which prunes relative to `root`. There is no
+# local skip set here any more: the per-module copies matched components of
+# the ABSOLUTE path, so a checkout under a directory named `dist` or `env`
+# had every file silently skipped.
 
 # The only modules whose exports are shell sinks. A call is considered at all
 # only when its callee resolves to one of these through the file's imports.
@@ -197,8 +191,6 @@ def _assign_re(name: str) -> re.Pattern[str]:
 _MAX_HOPS = 2
 
 
-def _should_skip(path: Path) -> bool:
-    return any(part in _SKIP_DIRS for part in path.parts)
 
 
 def _cp_bindings(
@@ -691,10 +683,8 @@ def _check_file(path: Path) -> list[Finding]:
     return findings
 
 
-def check(root: Path) -> list[Finding]:
+def check(root: Path, *, include_build: bool = False) -> list[Finding]:
     findings: list[Finding] = []
-    for path in jsparse.iter_source_files(root):
-        if _should_skip(path):
-            continue
+    for path in jsparse.iter_source_files(root, include_build=include_build):
         findings.extend(_check_file(path))
     return findings

@@ -113,17 +113,9 @@ from mcp_audit import jsparse, tstools
 
 CHECK_ID = "ts_tool_input_validation"
 
-# House skip set, duplicated per module as the other checks do. Deliberately
-# free of "test" / "tests" / "fixtures" / "examples": `_should_skip` matches on
-# ANY component of an ABSOLUTE path, so those words would blank out this
-# check's own fixture tree (and any repo that keeps real code under them).
-# jsparse.iter_source_files applies the fuller TS set relative to `root`.
-_SKIP_DIRS = {
-    ".venv", "venv", "env", "node_modules", ".git", "site-packages",
-    ".tox", ".nox", "build", "dist", "__pycache__",
-    "out", "coverage", ".next", ".nuxt", ".svelte-kit", ".turbo",
-    ".vercel", ".cache", "bower_components", "vendor",
-}
+# File discovery lives in mcp_audit.discovery, applied by
+# `jsparse.iter_source_files` and pruned relative to `root`. See discovery.py
+# for why the per-module absolute-path skip sets were removed.
 
 # Zod chain methods that provably constrain NOTHING: with them the field
 # accepts exactly what it accepted without them (modulo `undefined` / `null` /
@@ -186,8 +178,6 @@ _IDENT_RE = re.compile(r"[A-Za-z_$][\w$]*")
 _WS = " \t\r\n"
 
 
-def _should_skip(path: Path) -> bool:
-    return any(part in _SKIP_DIRS for part in path.parts)
 
 
 def _zod_roots(src: jsparse.Source) -> set[str]:
@@ -536,10 +526,8 @@ def _check_file(path: Path) -> list[Finding]:
     return findings
 
 
-def check(root: Path) -> list[Finding]:
+def check(root: Path, *, include_build: bool = False) -> list[Finding]:
     findings: list[Finding] = []
-    for path in jsparse.iter_source_files(root):
-        if _should_skip(path):
-            continue
+    for path in jsparse.iter_source_files(root, include_build=include_build):
         findings.extend(_check_file(path))
     return findings
