@@ -5,6 +5,7 @@ on:
     paths:
       - "mcp-audit/action.yml"
       - ".github/workflows/mcp-audit-action-selftest.yml"
+      - "mcp-audit/tests/fixtures/no_auditable_code/**"
   pull_request:
     paths:
       - "mcp-audit/action.yml"
@@ -55,6 +56,52 @@ jobs:
         run: |
           test "${{ steps.scan.outputs.finding-count }}" = "0" || { echo "FAIL: expected 0 findings"; exit 1; }
           echo "OK: clean fixture, 0 findings, job green"
+
+  empty-scan-fails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        continue-on-error: true
+        uses: ./mcp-audit
+        with:
+          path: mcp-audit/tests/fixtures/no_auditable_code
+      - name: assert a scan that examined nothing fails rather than passing
+        shell: bash
+        run: |
+          test "${{ steps.scan.outcome }}" = "failure" || { echo "FAIL: a scan that read 0 files must not go green"; exit 1; }
+          echo "OK: empty scan failed the job (exit 3 -> error)"
+
+  empty-scan-fails-even-in-report-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        continue-on-error: true
+        uses: ./mcp-audit
+        with:
+          path: mcp-audit/tests/fixtures/no_auditable_code
+          fail-on-findings: "false"
+      - name: assert report-only does not soften an empty scan
+        shell: bash
+        run: |
+          test "${{ steps.scan.outcome }}" = "failure" || { echo "FAIL: report-only must still fail a scan that read nothing"; exit 1; }
+          echo "OK: empty scan failed even with fail-on-findings=false"
+
+  empty-scan-allow-empty-passes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - id: scan
+        uses: ./mcp-audit
+        with:
+          path: mcp-audit/tests/fixtures/no_auditable_code
+          args: "--allow-empty"
+      - name: assert --allow-empty is the documented opt-out
+        shell: bash
+        run: |
+          test "${{ steps.scan.outputs.finding-count }}" = "0" || { echo "FAIL: expected 0 findings"; exit 1; }
+          echo "OK: --allow-empty turned the empty scan green, deliberately"
 
   single-check-filter:
     runs-on: ubuntu-latest
