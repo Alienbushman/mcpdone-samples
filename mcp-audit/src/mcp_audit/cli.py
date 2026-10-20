@@ -30,10 +30,10 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from mcp_audit import discovery
+from mcp_audit import discovery, jsparse
 
 from mcp_audit.finding import Finding
 
@@ -69,6 +69,10 @@ class ScanResult:
     findings: list[Finding]
     files_examined: int
     scanned_build_output: bool
+    # TS/JS files the lexer refuses (too large, minified, unreadable). They
+    # are NOT in files_examined: counting a file nobody read as examined is
+    # how a 1.8 MB bundle used to scan "OK".
+    files_skipped: list[tuple[Path, str]] = field(default_factory=list)
 
 
 def scan(root: Path, *, only: list[str] | None = None) -> ScanResult:
@@ -91,12 +95,20 @@ def scan(root: Path, *, only: list[str] | None = None) -> ScanResult:
         discovery.count_sources(root) == 0
         and discovery.count_sources(root, include_build=True) > 0
     )
-    examined = discovery.count_analyzable(root, include_build=include_build)
+    skipped: list[tuple[Path, str]] = []
+    for path in jsparse.iter_source_files(root, include_build=include_build):
+        reason = jsparse.skip_reason(path)
+        if reason is not None:
+            skipped.append((path, reason))
+    examined = max(
+        0, discovery.count_analyzable(root, include_build=include_build) - len(skipped)
+    )
     findings = run_all_checks(root, only=only, include_build=include_build)
     return ScanResult(
         findings=findings,
         files_examined=examined,
         scanned_build_output=include_build,
+        files_skipped=skipped,
     )
 
 
@@ -187,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
                 "finding_count": len(findings),
                 "files_examined": result.files_examined,
                 "scanned_build_output": result.scanned_build_output,
+                "files_skipped": [
+                    {"path": str(p), "reason": r} for p, r in result.files_skipped
+                ],
                 "findings": [f.to_dict() for f in findings],
             },
             sys.stdout,
@@ -196,11 +211,16 @@ def main(argv: list[str] | None = None) -> int:
     elif empty:
         # stderr, and deliberately never the word "OK". This is the failure
         # mode where the tool reads nothing and the user reads that as a pass.
+        if result.files_skipped:
+            names = ", ".join(f"{p.name} ({r})" for p, r in result.files_skipped)
+            why = f"every source file was refused by the lexer: {names}"
+        else:
+            why = ("no Python or TypeScript source and no dependency "
+                   "manifest was found. Check the path, or pass "
+                   "--allow-empty if that is expected")
         print(
             f"mcp-audit: examined 0 files under {root} — nothing here to "
-            f"audit. This is NOT a clean result: no Python or TypeScript "
-            f"source and no dependency manifest was found. Check the path, "
-            f"or pass --allow-empty if that is expected.",
+            f"audit. This is NOT a clean result: {why}.",
             file=sys.stderr,
         )
     else:
@@ -209,7 +229,23 @@ def main(argv: list[str] | None = None) -> int:
             if result.scanned_build_output
             else ""
         )
-        if not findings:
+        skipped_note = ""
+        if result.files_skipped:
+            names = ", ".join(
+                f"{p.relative_to(root) if p.is_relative_to(root) else p} ({r})"
+                for p, r in result.files_skipped
+            )
+            skipped_note = (
+                f"; {len(result.files_skipped)} file(s) NOT analysed: {names}"
+            )
+        if not findings and result.files_skipped:
+            # Never "OK" when part of the code went unread.
+            print(
+                f"mcp-audit: 0 findings across {result.files_examined} "
+                f"file(s) under {root}{note}{skipped_note}. This is an "
+                f"incomplete result, not a clean one."
+            )
+        elif not findings:
             print(
                 f"mcp-audit: OK — 0 findings across "
                 f"{result.files_examined} file(s) under {root}{note}"
@@ -222,7 +258,7 @@ def main(argv: list[str] | None = None) -> int:
             summary = ", ".join(f"{n} {sev}" for sev, n in counts.items() if n)
             print(
                 f"mcp-audit: {len(findings)} finding(s) — {summary} "
-                f"across {result.files_examined} file(s){note}"
+                f"across {result.files_examined} file(s){note}{skipped_note}"
             )
 
     if empty:

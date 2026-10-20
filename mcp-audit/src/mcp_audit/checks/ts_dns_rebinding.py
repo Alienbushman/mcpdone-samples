@@ -756,21 +756,34 @@ def _file_imports_mcp_sdk(src: Source) -> bool:
     return False
 
 
+# --------------------------------------------------------------------------
+# DEFECT 4 (2026-10 disclosure recheck): inlined dependencies suppressed a
+# bundle. `@clawfetch/mcp@0.3.2` ships one esbuild `dist/index.js` with its
+# whole dependency tree inside it (ethers, ws, siwe...). The server's own
+# code constructs `StreamableHTTPServerTransport` bare on 0.0.0.0, but an
+# `Authorization` read inside an inlined HTTP client satisfied `_repo_has_auth`
+# for the whole file, so the published tarball of a known-vulnerable release
+# scanned clean. Both repo-wide gates now look only at first-party spans:
+# regions whose esbuild `// <path>` marker does not run through
+# `node_modules/`. A plain source file is one span, so repos are unchanged.
+# --------------------------------------------------------------------------
 def _repo_has_auth(sources: list[Source]) -> bool:
     for src in sources:
-        whole = jsparse.Span(0, len(src.masked))
+        spans = jsparse.first_party_spans(src)
         # `contains_token` already runs against the mask, so a token inside a
         # comment or a string never reaches here. The two header/query regexes
         # must run against RAW text (the header name usually lives inside a
         # string literal, whose interior the mask blanks), so they carry their
         # own liveness test — see DEFECT 3 above.
-        if jsparse.contains_token(src, whole, _AUTH_TOKENS):
+        if any(jsparse.contains_token(src, s, _AUTH_TOKENS) for s in spans):
             return True
-        if _live_matches(src, _AUTH_HEADER_RE):
-            return True
-        if _live_matches(src, _AUTH_QUERY_RE):
-            return True
+        for pattern in (_AUTH_HEADER_RE, _AUTH_QUERY_RE):
+            if any(jsparse.in_spans(spans, m.start())
+                   for m in _live_matches(src, pattern)):
+                return True
         for mt in _AUTH_DESTRUCTURE_RE.finditer(src.masked):
+            if not jsparse.in_spans(spans, mt.start()):
+                continue
             if _AUTH_DESTRUCTURE_NAMES.search(mt.group("inner")):
                 return True
     return False
@@ -779,15 +792,19 @@ def _repo_has_auth(sources: list[Source]) -> bool:
 def _repo_has_host_guard(sources: list[Source], *, tokens: frozenset[str] | set[str] | None = None) -> bool:
     use = _HOST_GUARD_TOKENS if tokens is None else tokens
     for src in sources:
-        whole = jsparse.Span(0, len(src.masked))
-        if jsparse.contains_token(src, whole, use):
+        spans = jsparse.first_party_spans(src)  # DEFECT 4
+        if any(jsparse.contains_token(src, s, use) for s in spans):
             return True
         for m in _live_matches(src, _HOST_HEADER_RE):
+            if not jsparse.in_spans(spans, m.start()):
+                continue
             # DEFECT 2: a bare read is not a guard. The value has to be
             # tested against something.
             if _host_read_is_a_guard(src, m.start(), m.end()):
                 return True
         for mt in _HOST_DESTRUCTURE_RE.finditer(src.masked):
+            if not jsparse.in_spans(spans, mt.start()):
+                continue
             if _HOST_DESTRUCTURE_NAMES.search(mt.group("inner")):
                 return True
     return False

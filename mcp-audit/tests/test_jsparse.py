@@ -997,3 +997,39 @@ def test_end_to_end_line_numbers_point_at_editable_lines():
     assert "server.registerTool(" in lines[call.line - 1]
     (sink,) = jsparse.find_calls(src, {"execSync"})
     assert "cp.execSync(" in lines[sink.line - 1]
+
+
+# --------------------------------------------------------------------------
+# bundles and skipped files (2026-10: the 1.8 MB clawfetch bundle)
+# --------------------------------------------------------------------------
+def test_first_party_spans_drops_node_modules_regions():
+    text = ("// node_modules/a/index.js\nvar a = 1;\n"
+            "// src/server.ts\nvar mine = 2;\n"
+            "// ../sdk/node_modules/b/b.js\nvar b = 3;\n")
+    src = jsparse.scan(text, Path("dist/index.js"))
+    spans = jsparse.first_party_spans(src)
+    kept = "".join(text[s.start:s.end] for s in spans)
+    assert kept == "// src/server.ts\nvar mine = 2;\n"
+
+
+def test_first_party_spans_returns_a_plain_file_whole():
+    text = "// a.js\nvar a = 1;\n"
+    src = jsparse.scan(text, Path("a.js"))
+    assert [(s.start, s.end) for s in jsparse.first_party_spans(src)] == [(0, len(text))]
+
+
+def test_skip_reason_names_large_and_minified_files(tmp_path):
+    big = tmp_path / "big.js"
+    big.write_text("var a = 1;\n" * 100, encoding="utf-8")
+    assert jsparse.skip_reason(big, max_bytes=100) == "too large"
+    assert jsparse.load(big, max_bytes=100) is None
+    mini = tmp_path / "min.js"
+    mini.write_text("var a=1;" * 600, encoding="utf-8")
+    assert jsparse.skip_reason(mini) == "minified"
+    ok = tmp_path / "ok.js"
+    ok.write_text("var a = 1;\n", encoding="utf-8")
+    assert jsparse.skip_reason(ok) is None
+
+
+def test_default_cap_admits_a_real_single_file_bundle():
+    assert jsparse.MAX_BYTES >= 2_000_000

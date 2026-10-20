@@ -160,3 +160,44 @@ def test_json_output_carries_the_examination_counters(tmp_path, capsys):
     payload = json.loads(capsys.readouterr().out)
     assert payload["files_examined"] == 1
     assert payload["scanned_build_output"] is False
+
+
+# --------------------------------------------------------------------------
+# A file the lexer refuses is not "examined" (2026-10, clawfetch 0.3.2)
+# --------------------------------------------------------------------------
+_MINIFIED = "var a=1;" * 600
+
+
+def test_only_a_minified_file_is_an_empty_scan(tmp_path, capsys):
+    root = tmp_path / "pkg"
+    _write(root / "index.js", _MINIFIED)
+    code = main([str(root)])
+    captured = capsys.readouterr()
+    assert code == 3
+    assert "OK" not in captured.out
+    assert "index.js (minified)" in captured.err
+
+
+def test_a_skipped_file_turns_ok_into_incomplete(tmp_path, capsys):
+    root = tmp_path / "pkg"
+    _write(root / "ok.js", "var a = 1;\n")
+    _write(root / "bundle.js", _MINIFIED)
+    code = main([str(root)])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "OK" not in out
+    assert "incomplete" in out
+    assert "bundle.js (minified)" in out
+    assert "across 1 file(s)" in out
+
+
+def test_json_lists_skipped_files(tmp_path, capsys):
+    import json
+
+    root = tmp_path / "pkg"
+    _write(root / "ok.js", "var a = 1;\n")
+    _write(root / "bundle.js", _MINIFIED)
+    main([str(root), "--json"])
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["files_examined"] == 1
+    assert [s["reason"] for s in payload["files_skipped"]] == ["minified"]

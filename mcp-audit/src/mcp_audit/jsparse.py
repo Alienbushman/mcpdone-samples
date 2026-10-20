@@ -569,7 +569,33 @@ def _looks_minified(text: str) -> bool:
         start = nl + 1
 
 
-def load(path: Path, *, max_bytes: int = 1_500_000) -> Source | None:
+# Single-file npm bundles inline their whole dependency tree: the published
+# `@clawfetch/mcp@0.3.2` is one 1.8 MB `dist/index.js`. The old 1.5 MB cap
+# skipped it without a word, so the tarball of a known-vulnerable release
+# scanned "OK - 0 findings". Lexing is linear (~0.25 s/MB), so the cap only
+# has to stop pathological inputs, not real bundles.
+MAX_BYTES = 8_000_000
+
+
+def skip_reason(path: Path, *, max_bytes: int = MAX_BYTES) -> str | None:
+    """Why `load` would refuse `path` without lexing it, or None.
+
+    Lets the CLI name the files it could not analyse instead of counting
+    them as examined: a skipped file reported as examined is the
+    silent-clean bug again."""
+    try:
+        if path.stat().st_size > max_bytes:
+            return "too large"
+        with path.open(encoding="utf-8", errors="replace") as fh:
+            head = fh.read(65536 + 1)
+    except OSError:
+        return "unreadable"
+    if _looks_minified(head):
+        return "minified"
+    return None
+
+
+def load(path: Path, *, max_bytes: int = MAX_BYTES) -> Source | None:
     """Read + lex. Returns None on OSError, on a file over max_bytes, or
     when the file looks minified (see §2.3). Never raises."""
     try:
@@ -1695,6 +1721,42 @@ def identifier_uses(src: Source, within: Span, name: str) -> list[int]:
                 continue
         out.append(i)
     return out
+
+
+# esbuild (and tsup, which wraps it) writes `// <path>` on its own line at the
+# start of every inlined module when it does not minify. In a bundle those
+# markers are the only record of which bytes the author wrote and which came
+# from node_modules.
+_BUNDLE_MARKER_RE = re.compile(
+    r"^// (\S+\.(?:[cm]?[jt]s|[jt]sx|json))[ \t]*\r?$", re.MULTILINE)
+
+
+def first_party_spans(src: Source) -> list[Span]:
+    """Spans of `src` that are not inlined third-party modules.
+
+    A plain source file (fewer than two markers) is returned whole. In a
+    bundle, every region whose marker path runs through `node_modules/` is
+    dropped; everything else, including the preamble before the first
+    marker, is kept. Used to keep repo-wide suppression signals (auth, host
+    validation) from firing on a dependency's code: an `Authorization` read
+    inside an inlined HTTP client says nothing about the server's own
+    endpoint. Dropping regions can only make those gates fire less."""
+    whole = Span(0, len(src.text))
+    marks = list(_BUNDLE_MARKER_RE.finditer(src.text))
+    if len(marks) < 2:
+        return [whole]
+    out: list[Span] = []
+    if marks[0].start() > 0:
+        out.append(Span(0, marks[0].start()))
+    for i, m in enumerate(marks):
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(src.text)
+        if "node_modules/" not in m.group(1).replace("\\", "/"):
+            out.append(Span(m.start(), end))
+    return out
+
+
+def in_spans(spans: list[Span], offset: int) -> bool:
+    return any(s.start <= offset < s.end for s in spans)
 
 
 def contains_token(src: Source, within: Span, tokens: Collection[str]) -> bool:

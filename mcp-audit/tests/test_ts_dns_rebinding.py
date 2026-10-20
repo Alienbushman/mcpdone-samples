@@ -709,3 +709,76 @@ def test_shadowing_never_silences_a_real_sdk_import(tmp_path):
     root = _write(tmp_path / "notshadowed", **{"src__server.ts": _MCP_IMPORT + _CTOR})
     findings = check(root)
     assert len(findings) == 1, [f.message for f in findings]
+
+
+# --- DEFECT 4: inlined dependencies suppressing a bundle --------------------
+# Shape of the published `@clawfetch/mcp@0.3.2` tarball: one esbuild bundle,
+# `// <path>` marker per inlined module, the dependency tree first and the
+# server's own code last. The old repo-wide gates saw the dependency's
+# `Authorization` header and went silent on a 0.0.0.0 bare transport.
+_VENDORED_AUTH = """\
+// ../clawfetch-sdk/node_modules/some-http-client/lib/request.js
+function send(req, token) {
+  req.headers['Authorization'] = 'Bearer ' + token;
+  if (req.headers.authorization !== expected) throw new Error('no');
+}
+"""
+_VENDORED_HOST_GUARD = """\
+// node_modules/@modelcontextprotocol/sdk/dist/esm/server/middleware/hostHeaderValidation.js
+function hostHeaderValidation(allowedHostnames) {
+  return (req, res, next) => { if (!allowedHostnames.includes(req.headers.host)) res.status(403); next(); };
+}
+"""
+
+
+def _bundle(*vendored: str, first_party: str = "") -> str:
+    own = """\
+// src/index.ts
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+const { StreamableHTTPServerTransport: StreamableTransport } = await import("@modelcontextprotocol/sdk/server/streamableHttp.js");
+const express = (await import("express")).default;
+const app = express();
+%s
+app.all("/mcp", async (req, res) => {
+  const t = new StreamableTransport({ sessionIdGenerator: () => "x" });
+  await t.handleRequest(req, res);
+});
+app.listen(3001, "0.0.0.0");
+""" % first_party
+    return "".join(vendored) + own
+
+
+def test_vendored_auth_in_a_bundle_does_not_suppress(tmp_path):
+    root = _write(tmp_path / "pkg", **{"dist__index.js": _bundle(_VENDORED_AUTH)})
+    findings = check(root, include_build=True)
+    assert len(findings) == 1, [f.message for f in findings]
+
+
+def test_vendored_host_guard_in_a_bundle_does_not_suppress(tmp_path):
+    root = _write(tmp_path / "pkg", **{"dist__index.js": _bundle(
+        _VENDORED_AUTH, _VENDORED_HOST_GUARD)})
+    assert len(check(root, include_build=True)) == 1
+
+
+def test_first_party_guard_in_a_bundle_still_suppresses(tmp_path):
+    """The fixed clawfetch: the SDK middleware is inlined AND the author's
+    own code mounts it. Precision must survive the narrowing."""
+    root = _write(tmp_path / "pkg", **{"dist__index.js": _bundle(
+        _VENDORED_HOST_GUARD,
+        first_party='app.use(hostHeaderValidation(["127.0.0.1", "localhost"]));')})
+    assert check(root, include_build=True) == []
+
+
+def test_first_party_auth_in_a_bundle_still_suppresses(tmp_path):
+    root = _write(tmp_path / "pkg", **{"dist__index.js": _bundle(
+        _VENDORED_AUTH,
+        first_party="app.use((req, res, next) => { if (req.headers.authorization !== process.env.KEY) return res.status(401).end(); next(); });")})
+    assert check(root, include_build=True) == []
+
+
+def test_one_marker_is_not_a_bundle(tmp_path):
+    """A hand-written file that happens to start with a `// path.js` comment
+    is analysed whole, exactly as before."""
+    src = "// src/server.js\n" + _VENDORED_AUTH.split("\n", 1)[1] + _bundle().split("\n", 1)[1]
+    root = _write(tmp_path / "pkg", **{"src__server.js": src})
+    assert check(root) == []
