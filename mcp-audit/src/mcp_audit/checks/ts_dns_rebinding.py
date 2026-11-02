@@ -861,10 +861,12 @@ def _class_label(cls: str) -> str:
 
 def _remediation() -> str:
     return (
-        "Configure the transport with both lists: "
-        "`new StreamableHTTPServerTransport({ sessionIdGenerator, "
-        "enableDnsRebindingProtection: true, allowedHosts: ['127.0.0.1:3000', "
-        "'localhost:3000'], allowedOrigins: ['http://127.0.0.1:3000'] })`. On "
+        "Add both lists to the options this transport already takes, using "
+        "your real port: `enableDnsRebindingProtection: true, allowedHosts: "
+        "['127.0.0.1:3000', 'localhost:3000'], allowedOrigins: "
+        "['http://127.0.0.1:3000']`. Leave `sessionIdGenerator` exactly as it "
+        "is: a stateless server (`undefined`) must stay stateless, and adding "
+        "a generator makes the transport stateful and breaks it. On "
         "SDK >= 1.24.0 you can instead build the app with "
         "`createMcpExpressApp(...)` (or the Hono / Fastify equivalent), which "
         "arms host validation by default on a localhost bind, or mount "

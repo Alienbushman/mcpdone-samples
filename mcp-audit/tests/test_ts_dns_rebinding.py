@@ -782,3 +782,13 @@ def test_one_marker_is_not_a_bundle(tmp_path):
     src = "// src/server.js\n" + _VENDORED_AUTH.split("\n", 1)[1] + _bundle().split("\n", 1)[1]
     root = _write(tmp_path / "pkg", **{"src__server.js": src})
     assert check(root) == []
+
+
+def test_remediation_does_not_tell_a_stateless_server_to_add_sessions():
+    """The elfa maintainer declined our suggested snippet, correctly: it
+    included a session generator, which flips a stateless transport to
+    stateful. The advice must add the lists and leave sessions alone."""
+    findings = _findings("ts_dns_rebinding_bad")
+    remediation = findings[0].remediation
+    assert "Leave `sessionIdGenerator` exactly as it is" in remediation
+    assert "{ sessionIdGenerator," not in remediation
