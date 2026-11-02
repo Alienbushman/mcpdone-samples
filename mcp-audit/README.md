@@ -3,7 +3,7 @@
 Static security + correctness audit for MCP server repos, in **Python and TypeScript/JavaScript**.
 
 ```bash
-pip install mcp-audit
+pip install mcpdone-audit
 mcp-audit                     # scan the current directory
 mcp-audit /path/to/repo       # scan a specific repo
 mcp-audit --json              # machine-readable output
@@ -17,7 +17,7 @@ Exit codes: **0** clean, **1** at least one finding, **2** usage error, **3** no
 
 A scanner that cannot tell those apart is worse than no scanner, because it
 issues a clean bill of health for code it never opened. `mcp-audit` has
-shipped that bug twice, so it now reports how many files it read and exits
+shipped that bug more than once, so it now reports how many files it read and exits
 **3** when that number is zero:
 
 ```
@@ -107,7 +107,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: Alienbushman/mcpdone-samples/mcp-audit@mcp-audit-v0.11.1
+      - uses: Alienbushman/mcpdone-samples/mcp-audit@mcp-audit-v0.11.2
         with:
           path: .                 # dir to scan (default '.')
           # version: 0.8.0        # pin the mcpdone-audit release (default: latest)
