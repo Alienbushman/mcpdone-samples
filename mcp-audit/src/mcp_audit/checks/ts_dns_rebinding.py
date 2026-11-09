@@ -103,19 +103,18 @@ measured this check's recall at 57% before the three fixes below:
     classes from unrelated packages. (That repo is correctly quiet anyway —
     it mounts `requireAuth` on the route.)
   - Authentication that is CONDITIONAL and off by default in exactly the
-    local case is read as authentication. `oobe-protocol__sap-mcp`'s
-    `src/transports/http.ts` throws only when `!config.apiKey &&
-    !isLoopbackHost(host)`, i.e. it explicitly blesses "loopback with no
-    API key", and the 401 block below it is wrapped in `if (config.apiKey)`
-    so it never runs for a local start. That is precisely the "localhost is
-    safe" belief the advisory refutes, and this check cannot see it: the
+    local case is read as authentication. A server that refuses to start
+    only when it has no key AND is bound to a non-loopback host, and whose
+    401 check runs only when a key is configured, explicitly blesses
+    "loopback with no key", so the check never runs for a local start.
+    That is precisely the "localhost is safe" belief the advisory refutes, and this check cannot see it: the
     repo-wide auth gate has no notion of a condition. Deciding it would
     need path-sensitivity we do not have, and guessing wrong is a false
     positive on a server that IS authenticated in its hosted mode.
   - A control that is present but UNARMED by default is read as armed.
-    `elfa-ai__mcp` gates both its origin check and the transport's option
-    spread on `ELFA_MCP_ALLOWED_ORIGINS`, which is unset by default, so a
-    default install has neither. Same reason as above: the signals here are
+    A server that gates both its origin check and the transport's option
+    spread on an environment variable that is unset by default has neither
+    in a default install. Same reason as above: the signals here are
     existence signals, not reachability signals.
 
 Both of the last two are the *conservative* failure direction — they under-
@@ -327,11 +326,11 @@ _IDENT_RE = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*\Z")
 
 # --------------------------------------------------------------------------
 # DEFECT 3 (npm-corpus audit): auth-looking tokens in prose and in generated
-# code. `igorzheludkov__execbro` was suppressed repo-wide because the word
-# `Authorization` appears five times in `src/core/appRequest.ts` — inside a
+# code. One census repo was suppressed repo-wide because the word
+# `Authorization` appears five times in a helper module, inside a
 # template literal that GENERATES JavaScript to inject into a target app, and
-# inside a plain-English error message reading "pass headers.Authorization
-# explicitly". Neither is an inbound auth check on this server's own endpoint.
+# inside a plain-English error message that names the header field.
+# Neither is an inbound auth check on this server's own endpoint.
 #
 # The regexes above must keep running against RAW text and cannot simply move
 # to the mask: the common real spelling `req.headers["authorization"]` puts
@@ -368,7 +367,7 @@ def _live_matches(src: Source, pattern: re.Pattern[str]) -> list[re.Match[str]]:
 
 # --------------------------------------------------------------------------
 # DEFECT 2 (npm-corpus audit): `req.headers.host` read as a URL base, counted
-# as a host guard. `corralimited__snapdiff-mcp/src/http.ts:40` reads
+# as a host guard. One census repo's HTTP entry point reads
 #
 #     new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`)
 #
@@ -429,7 +428,7 @@ _GUARD_SUFFIX_RE = re.compile(
 #     indexed by the host. Indexing a *named* collection by the header value is
 #     a lookup, and the only reason to look a Host header up in a table is to
 #     decide whether it is allowed. Anchored to `ident[` so it cannot match the
-#     template-literal hole (`${`) that snapdiff-mcp's URL base opens, which is
+#     template-literal hole (`${`) that such a URL base opens, which is
 #     what defect 2 exists to keep firing.
 #   * `hostAllowed(...)` / `originIsValid(...)` / `isHostWhitelisted(...)` — a
 #     validation helper whose name carries the intent in the MIDDLE or at the
@@ -465,7 +464,7 @@ _HOST_BIND_RE = re.compile(
 )
 
 # Members of such a local that still carry the Host value. `url.pathname` is
-# NOT one, which is what keeps snapdiff-mcp's routing-only `new URL(req.url,
+# NOT one, which is what keeps a routing-only `new URL(req.url,
 # \`http://${req.headers.host}\`)` from counting as a guard.
 _HOST_DERIVED_MEMBERS = ("hostname", "host", "origin")
 
@@ -596,12 +595,12 @@ def _host_read_is_a_guard(src: Source, start: int, end: int) -> bool:
 # DEFECT 1 (npm-corpus audit): aliased / renamed transport bindings.
 #
 # `jsparse.find_constructions` matches the class name exactly as written, so a
-# renamed binding was invisible. `clawfetch__clawfetch-mcp/src/index.ts:80`
+# renamed binding was invisible. One census repo's entry point
 # builds an unprotected Streamable HTTP transport through
 #
-#     const { StreamableHTTPServerTransport: StreamableTransport } =
+#     const { StreamableHTTPServerTransport: HttpT } =
 #         await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
-#     const t = new StreamableTransport({ sessionIdGenerator: () => id });
+#     const t = new HttpT({ ... });
 #
 # The file was scanned (a static `import type` from the SDK satisfied the MCP
 # gate) and simply yielded no construction site. It was the worst miss in the
@@ -758,8 +757,8 @@ def _file_imports_mcp_sdk(src: Source) -> bool:
 
 # --------------------------------------------------------------------------
 # DEFECT 4 (2026-10 disclosure recheck): inlined dependencies suppressed a
-# bundle. `@clawfetch/mcp@0.3.2` ships one esbuild `dist/index.js` with its
-# whole dependency tree inside it (ethers, ws, siwe...). The server's own
+# bundle. A published package shipped one esbuild `dist/index.js` with its
+# whole dependency tree inside it. The server's own
 # code constructs `StreamableHTTPServerTransport` bare on 0.0.0.0, but an
 # `Authorization` read inside an inlined HTTP client satisfied `_repo_has_auth`
 # for the whole file, so the published tarball of a known-vulnerable release

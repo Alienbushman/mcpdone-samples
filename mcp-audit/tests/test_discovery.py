@@ -163,7 +163,7 @@ def test_json_output_carries_the_examination_counters(tmp_path, capsys):
 
 
 # --------------------------------------------------------------------------
-# A file the lexer refuses is not "examined" (2026-10, clawfetch 0.3.2)
+# A file the lexer refuses is not "examined" (a large bundle)
 # --------------------------------------------------------------------------
 _MINIFIED = "var a=1;" * 600
 

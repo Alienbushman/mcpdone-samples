@@ -242,7 +242,7 @@ def _write(root: Path, **files: str) -> Path:
 
 
 # --- DEFECT 1: aliased / renamed transport imports -------------------------
-_CLAWFETCH = """\
+_RENAMED_IMPORT = """\
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -250,36 +250,36 @@ import { createServer } from './server.js';
 
 if (process.env.MODE === 'http') {
   const { randomUUID } = await import('node:crypto');
-  const { StreamableHTTPServerTransport: StreamableTransport } = await import(
+  const { StreamableHTTPServerTransport: HttpT } = await import(
     '@modelcontextprotocol/sdk/server/streamableHttp.js'
   );
   const express = (await import('express')).default;
   const app = express();
   app.all('/mcp', async (req, res) => {
-    const newSessionId = randomUUID();
+    const sid = randomUUID();
     const server = createServer();
-    const t = new StreamableTransport({ sessionIdGenerator: () => newSessionId });
+    const t = new HttpT({ sessionIdGenerator: () => sid });
     await server.connect(t);
     await t.handleRequest(req, res);
   });
-  app.listen(3001, '0.0.0.0');
+  app.listen(4100, '0.0.0.0');
 }
 """
 
 
 def test_destructured_dynamic_import_with_rename_is_found(tmp_path):
-    """clawfetch__clawfetch-mcp/src/index.ts:80, the worst miss in the audit.
+    """A census repo's entry point, the worst miss in the audit.
     `find_constructions` matches the class name as written, so the renamed
     binding produced no construction site at all. The file WAS scanned — the
     static `import type` satisfied the MCP gate — it simply yielded nothing.
     A 0.0.0.0 bind with no auth and no host validation."""
-    root = _write(tmp_path / "clawfetch", **{"src__index.ts": _CLAWFETCH})
+    root = _write(tmp_path / "renamed", **{"src__index.ts": _RENAMED_IMPORT})
     findings = check(root)
     assert len(findings) == 1, [f.message for f in findings]
     assert findings[0].line == 16, findings[0].line
     # reported under the SDK's name, not the author's local alias
     assert "StreamableHTTPServerTransport" in findings[0].message
-    assert "StreamableTransport`" not in findings[0].message
+    assert "HttpT`" not in findings[0].message
 
 
 def test_static_named_import_with_rename_is_found(tmp_path):
@@ -356,13 +356,13 @@ async function handle(req, res) {
 
 
 # --- DEFECT 2: req.headers.host read as a URL base -------------------------
-_SNAPDIFF = """\
+_HOST_URL_BASE = """\
 import { createServer } from 'node:http';
 import { randomUUID } from 'node:crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { createMcpServer } from './server.js';
+import { makeServer } from './server.js';
 
-export async function startHttpServer(options) {
+export async function serve(opts) {
   const server = createServer(async (req, res) => {
     const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
     if (url.pathname !== '/mcp') {
@@ -373,24 +373,24 @@ export async function startHttpServer(options) {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
     });
-    const mcp = createMcpServer();
+    const mcp = makeServer();
     await mcp.connect(transport);
     await transport.handleRequest(req, res);
   });
-  server.listen(options.port, options.host);
+  server.listen(opts.port, opts.host);
 }
 """
 
 
 def test_host_header_as_a_url_base_is_not_a_host_guard(tmp_path):
-    """corralimited__snapdiff-mcp/src/http.ts:40. `new URL(req.url ?? '/',
+    """A census repo's HTTP entry point. `new URL(req.url ?? '/',
     `http://${req.headers.host ?? 'localhost'}`)` is a base URL for pathname
     routing; it validates precisely nothing. The old heuristic counted a bare
     READ of the Host header as evidence the author had thought about host
     validation and went quiet across the whole repository. Note that
     `url.pathname !== '/mcp'` two lines down IS a comparison — but on the
     path, not on the host, and it must not rescue the suppression."""
-    root = _write(tmp_path / "snapdiff", **{"src__http.ts": _SNAPDIFF})
+    root = _write(tmp_path / "urlbase", **{"src__server.ts": _HOST_URL_BASE})
     findings = check(root)
     assert len(findings) == 1, [f.message for f in findings]
     assert findings[0].line == 14, findings[0].line
@@ -424,7 +424,7 @@ server.listen(3000, '127.0.0.1');
 
 
 # --- DEFECT 3: auth tokens in prose and generated-code templates -----------
-_EXECBRO = """\
+_GENERATED_AUTH = """\
 export function buildRequestScript(opts) {
   const authBlock = opts.auth === 'auto'
     ? `
@@ -436,14 +436,14 @@ export function buildRequestScript(opts) {
   return `(function(){
     var headers = {};${authBlock}
     var authNote = !headers['Authorization']
-        ? 'This request was sent UNAUTHENTICATED - pass headers.Authorization explicitly.'
+        ? 'No auth header was set - pass headers.Authorization yourself.'
         : null;
     return fetch(url, { headers: headers });
   })()`;
 }
 """
 
-_EXECBRO_SERVER = """\
+_GENERATED_AUTH_SERVER = """\
 import express from 'express';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 const app = express();
@@ -456,15 +456,15 @@ app.listen(3000);
 
 
 def test_authorization_in_prose_and_generated_code_is_not_an_auth_check(tmp_path):
-    """igorzheludkov__execbro/src/index.ts:189. The ENTIRE repository was
-    suppressed because `Authorization` appears in src/core/appRequest.ts
+    """A census repo. The ENTIRE repository was
+    suppressed because `Authorization` appears in a helper module
     inside (a) a template literal that generates JavaScript to inject into a
     TARGET app and (b) a plain-English error message reading
     'headers.Authorization'. It took neutralising all five mentions to make
     the finding appear. None of them is an inbound check on this server."""
-    root = _write(tmp_path / "execbro", **{
-        "src__core__appRequest.ts": _EXECBRO,
-        "src__index.ts": _EXECBRO_SERVER,
+    root = _write(tmp_path / "genauth", **{
+        "src__core__requestScript.ts": _GENERATED_AUTH,
+        "src__index.ts": _GENERATED_AUTH_SERVER,
     })
     findings = check(root)
     assert len(findings) == 1, [f.message for f in findings]
@@ -712,12 +712,12 @@ def test_shadowing_never_silences_a_real_sdk_import(tmp_path):
 
 
 # --- DEFECT 4: inlined dependencies suppressing a bundle --------------------
-# Shape of the published `@clawfetch/mcp@0.3.2` tarball: one esbuild bundle,
+# Shape of a published single-bundle tarball: one esbuild bundle,
 # `// <path>` marker per inlined module, the dependency tree first and the
 # server's own code last. The old repo-wide gates saw the dependency's
 # `Authorization` header and went silent on a 0.0.0.0 bare transport.
 _VENDORED_AUTH = """\
-// ../clawfetch-sdk/node_modules/some-http-client/lib/request.js
+// ../vendor-sdk/node_modules/some-http-client/lib/request.js
 function send(req, token) {
   req.headers['Authorization'] = 'Bearer ' + token;
   if (req.headers.authorization !== expected) throw new Error('no');
@@ -735,15 +735,15 @@ def _bundle(*vendored: str, first_party: str = "") -> str:
     own = """\
 // src/index.ts
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-const { StreamableHTTPServerTransport: StreamableTransport } = await import("@modelcontextprotocol/sdk/server/streamableHttp.js");
+const { StreamableHTTPServerTransport: HttpT } = await import("@modelcontextprotocol/sdk/server/streamableHttp.js");
 const express = (await import("express")).default;
 const app = express();
 %s
 app.all("/mcp", async (req, res) => {
-  const t = new StreamableTransport({ sessionIdGenerator: () => "x" });
+  const t = new HttpT({ sessionIdGenerator: () => "x" });
   await t.handleRequest(req, res);
 });
-app.listen(3001, "0.0.0.0");
+app.listen(4100, "0.0.0.0");
 """ % first_party
     return "".join(vendored) + own
 
@@ -761,7 +761,7 @@ def test_vendored_host_guard_in_a_bundle_does_not_suppress(tmp_path):
 
 
 def test_first_party_guard_in_a_bundle_still_suppresses(tmp_path):
-    """The fixed clawfetch: the SDK middleware is inlined AND the author's
+    """A fixed bundle: the SDK middleware is inlined AND the author's
     own code mounts it. Precision must survive the narrowing."""
     root = _write(tmp_path / "pkg", **{"dist__index.js": _bundle(
         _VENDORED_HOST_GUARD,
@@ -785,7 +785,7 @@ def test_one_marker_is_not_a_bundle(tmp_path):
 
 
 def test_remediation_does_not_tell_a_stateless_server_to_add_sessions():
-    """The elfa maintainer declined our suggested snippet, correctly: it
+    """Our earlier suggested snippet was wrong: it
     included a session generator, which flips a stateless transport to
     stateful. The advice must add the lists and leave sessions alone."""
     findings = _findings("ts_dns_rebinding_bad")

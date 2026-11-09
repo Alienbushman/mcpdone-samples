@@ -569,8 +569,8 @@ def _looks_minified(text: str) -> bool:
         start = nl + 1
 
 
-# Single-file npm bundles inline their whole dependency tree: the published
-# `@clawfetch/mcp@0.3.2` is one 1.8 MB `dist/index.js`. The old 1.5 MB cap
+# Single-file npm bundles inline their whole dependency tree: one published
+# package is a single multi-megabyte `dist/index.js`. The old 1.5 MB cap
 # skipped it without a word, so the tarball of a known-vulnerable release
 # scanned "OK - 0 findings". Lexing is linear (~0.25 s/MB), so the cap only
 # has to stop pathological inputs, not real bundles.

@@ -1000,7 +1000,7 @@ def test_end_to_end_line_numbers_point_at_editable_lines():
 
 
 # --------------------------------------------------------------------------
-# bundles and skipped files (2026-10: the 1.8 MB clawfetch bundle)
+# bundles and skipped files (a large bundle)
 # --------------------------------------------------------------------------
 def test_first_party_spans_drops_node_modules_regions():
     text = ("// node_modules/a/index.js\nvar a = 1;\n"

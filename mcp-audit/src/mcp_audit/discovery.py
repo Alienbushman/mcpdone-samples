@@ -26,8 +26,8 @@ files:
 
 2. **A published package is almost entirely build output.** An npm tarball
    ships `package/dist/*.js` and no sources at all, so pruning `dist`
-   discarded the entire package. Reproduced on the real
-   `@corralimited/snapdiff-mcp` tree: the same five files report 1 HIGH
+   discarded the entire package. Reproduced on a real
+   published package tree: the same files report 1 HIGH
    under `src/` and 0 findings under `dist/`, byte for byte identical.
 
    Fixed by `include_build`: build directories are residue in a repository

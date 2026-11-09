@@ -71,7 +71,7 @@ class ScanResult:
     scanned_build_output: bool
     # TS/JS files the lexer refuses (too large, minified, unreadable). They
     # are NOT in files_examined: counting a file nobody read as examined is
-    # how a 1.8 MB bundle used to scan "OK".
+    # how a large bundle used to scan "OK".
     files_skipped: list[tuple[Path, str]] = field(default_factory=list)
 
 
